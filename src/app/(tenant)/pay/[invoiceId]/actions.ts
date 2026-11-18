@@ -7,7 +7,7 @@ import { requestContext } from "@/lib/security/request-context";
 import { limit } from "@/lib/security/rate-limit";
 import { newTransactionId } from "@/lib/security/crypto";
 import { MAX_PROOF_BYTES, pdfLooksActive, sniffProof } from "@/lib/security/files";
-import { getProvider, isAllowedCheckoutUrl } from "@/lib/payments/registry";
+import { getProvider, isAllowedCheckoutUrl, isProviderConfigured } from "@/lib/payments/registry";
 import { ProviderError } from "@/lib/payments/types";
 import { initiateMobileMoneySchema, transferProofSchema } from "@/lib/validation/schemas";
 import { serverEnv } from "@/lib/env";
@@ -28,6 +28,7 @@ export async function initiateMobileMoneyPayment(input: unknown): Promise<PayRes
   const parsed = initiateMobileMoneySchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Requête invalide." };
   const { invoiceId, operator } = parsed.data;
+  if (!isProviderConfigured("cinetpay")) return { ok: false, message: "Le paiement en ligne via agrégateur n'est pas activé." };
 
   // Lecture RLS : l'avis doit être visible par CE locataire.
   const { data: invoice } = await supabase
@@ -77,7 +78,8 @@ export async function initiateMobileMoneyPayment(input: unknown): Promise<PayRes
       p_provider: provider.name, p_tx_id: intent.transaction_id,
       p_reason: e instanceof Error ? e.message.slice(0, 200) : "init_echec", p_ip: ctx.ip,
     });
-    return { ok: false, message: e instanceof ProviderError ? e.message : "Service de paiement momentanément indisponible." };
+    console.warn(`[paiement] initialisation échouée · tx=${intent.transaction_id} · ${e instanceof Error ? e.message : "inconnu"}`);
+    return { ok: false, message: "Service de paiement momentanément indisponible. Réessayez ou payez par virement." };
   }
 }
 

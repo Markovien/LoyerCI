@@ -284,7 +284,9 @@ begin
 end $$;
 reset role;
 do $$ begin
-  assert has_function_privilege('anon', 'public.verify_receipt(uuid, text)', 'execute'), 'anon doit pouvoir vérifier';
+  -- S6 : la vérification passe par le serveur (limiteur de débit), plus d'appel PostgREST direct.
+  assert not has_function_privilege('anon', 'public.verify_receipt(uuid, text)', 'execute'), 'verify_receipt exposé à anon';
+  assert has_function_privilege('service_role', 'public.verify_receipt(uuid, text)', 'execute'), 'le serveur doit pouvoir vérifier';
   assert not has_function_privilege('anon', 'public.get_transfer_instructions(uuid)', 'execute'), 'anon ne doit pas lire de RIB';
   assert not has_function_privilege('authenticated', 'public.review_transfer(uuid, uuid, boolean, text, inet, text)', 'execute'), 'review_transfer exposé';
   raise notice 'OK  liste blanche des fonctions exécutables';
@@ -385,6 +387,186 @@ begin
   select * into b from private.verify_audit_chain();
   assert b.reason = 'contenu altéré', 'altération de l''audit non détectée';
   raise notice 'OK  audit : altération superutilisateur détectée au maillon %', b.broken_at_seq;
+end $$;
+
+
+-- =============================================================================
+-- Correctifs de l'audit de sécurité (migration 20261118000500_security_hardening)
+-- =============================================================================
+
+-- S1 : révoquer le RIB actif puis en ajouter un nouveau ne contourne plus la carence
+set role service_role;
+do $$
+declare r record;
+begin
+  for r in select id from public.payout_accounts where org_id = 'c0000000-0000-4000-8000-000000000001' and revoked_at is null loop
+    perform public.cancel_payout_account('a0000000-0000-4000-8000-000000000001', r.id, '102.0.0.66', 'pirate');
+  end loop;
+  select * into r from public.add_payout_account('a0000000-0000-4000-8000-000000000001',
+    'c0000000-0000-4000-8000-000000000001', 'banque', 'PIRATE 2', 'Banque X',
+    'CI51CI0099999999999999999999', null, null, '102.0.0.66', 'pirate');
+  assert r.activates_at > now() + interval '47 hours', 'S1 : carence contournée par révocation préalable';
+  -- Nouveau type (Mobile Money après un RIB) : carence également
+  select * into r from public.add_payout_account('a0000000-0000-4000-8000-000000000001',
+    'c0000000-0000-4000-8000-000000000001', 'mobile_money', 'PIRATE 3', null, null, 'wave', '2250707999999', '102.0.0.66', 'pirate');
+  assert r.activates_at > now() + interval '47 hours', 'S1 : carence contournée par changement de type';
+  -- Première configuration d'une organisation vierge : immédiate
+  select * into r from public.add_payout_account('b0000000-0000-4000-8000-000000000001',
+    'c0000000-0000-4000-8000-000000000002', 'mobile_money', 'SCI LAGUNE', null, null, 'orange', '2250707111222', null, null);
+  assert r.activates_at <= now(), 'S1 : la toute première coordonnée doit être active immédiatement';
+  raise notice 'OK  S1 carence : ni la révocation préalable ni le changement de type ne la contournent';
+end $$;
+reset role;
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000003';
+do $$
+declare r record;
+begin
+  select * into r from public.get_transfer_instructions(
+    (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000001'));
+  assert r.account_holder is null, 'S1 : un RIB en carence est servi au locataire : ' || coalesce(r.account_holder, '');
+  raise notice 'OK  S1 carence : aucun RIB pirate servi au locataire pendant 48 h';
+end $$;
+reset role;
+
+-- S2 : une table ou une fonction créée par une FUTURE migration n'est accessible à personne par défaut
+create table public.zz_future_table (id int);
+create function public.zz_future_fn() returns int language sql security definer set search_path = '' as $$ select 1 $$;
+do $$ begin
+  assert not has_table_privilege('anon', 'public.zz_future_table', 'select'), 'S2 : SELECT par défaut pour anon';
+  assert not has_table_privilege('authenticated', 'public.zz_future_table', 'insert'), 'S2 : INSERT par défaut pour authenticated';
+  assert not has_function_privilege('anon', 'public.zz_future_fn()', 'execute'), 'S2 : EXECUTE par défaut pour anon';
+  assert not has_function_privilege('authenticated', 'public.zz_future_fn()', 'execute'), 'S2 : EXECUTE par défaut pour authenticated';
+  raise notice 'OK  S2 privilèges par défaut : rien n''est accordé implicitement aux nouvelles tables/fonctions';
+end $$;
+drop function public.zz_future_fn();
+drop table public.zz_future_table;
+
+-- Garde-fou générique (à garder à jour) : liste blanche exhaustive des fonctions
+-- exécutables par anon/authenticated, RLS active partout, aucune écriture client,
+-- search_path figé sur toute fonction SECURITY DEFINER.
+do $$
+declare v text;
+begin
+  select string_agg(p.oid::regprocedure::text, ', ') into v
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname in ('public', 'private') and has_function_privilege('anon', p.oid, 'execute');
+  assert v is null, 'fonctions exécutables par anon : ' || v;
+
+  select string_agg(p.oid::regprocedure::text, ', ') into v
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname in ('public', 'private') and has_function_privilege('authenticated', p.oid, 'execute')
+     and p.oid::regprocedure::text not in (
+       'private.user_org_ids(member_role[])', 'private.user_tenant_ids()', 'private.tenant_org_ids()',
+       'private.tenant_property_ids()', 'get_transfer_instructions(uuid)', 'dashboard_kpis(uuid,date)');
+  assert v is null, 'fonctions exécutables par authenticated hors liste blanche : ' || v;
+
+  select string_agg(c.relname, ', ') into v
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind in ('r', 'p') and not c.relrowsecurity;
+  assert v is null, 'tables sans RLS : ' || v;
+
+  select string_agg(c.relname || ':' || r.rolname || ':' || pr.p, ', ') into v
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    cross join (values ('anon'), ('authenticated')) r(rolname)
+    cross join (values ('insert'), ('update'), ('delete'), ('truncate')) pr(p)
+   where n.nspname = 'public' and c.relkind in ('r', 'p') and has_table_privilege(r.rolname, c.oid, pr.p);
+  assert v is null, 'écritures client autorisées : ' || v;
+
+  select string_agg(c.relname, ', ') into v
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind in ('r', 'p') and has_table_privilege('anon', c.oid, 'select');
+  assert v is null, 'tables lisibles par anon : ' || v;
+
+  select string_agg(p.oid::regprocedure::text, ', ') into v
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname in ('public', 'private') and p.prosecdef
+     and not coalesce(p.proconfig @> array['search_path=""'], false);
+  assert v is null, 'SECURITY DEFINER sans search_path figé : ' || v;
+  raise notice 'OK  garde-fou : liste blanche EXECUTE, RLS partout, aucune écriture client, search_path figé';
+end $$;
+
+-- S3 : encaissement confirmé sur un avis annulé -> tracé, sans imputation ni quittance, sans exception
+set role service_role;
+do $$
+declare v_inv uuid := (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000003');
+begin
+  perform public.create_payment_intent('a0000000-0000-4000-8000-000000000003', v_inv, 'cinetpay', 'orange', 'TX-NOTMINE-0001', null, null);
+  raise exception 'ÉCHEC : intention sur l''avis d''un autre locataire';
+exception when insufficient_privilege then null;
+end $$;
+reset role;
+-- Yao Konan (org B) n'a pas de compte : on lui en lie un le temps du test
+insert into auth.users (id, email) values ('b0000000-0000-4000-8000-000000000009', 'yao.konan@example.ci');
+update public.tenants set user_id = 'b0000000-0000-4000-8000-000000000009' where id = 'e0000000-0000-4000-8000-000000000003';
+set role service_role;
+select * from public.create_payment_intent('b0000000-0000-4000-8000-000000000009',
+  (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000003'), 'cinetpay', 'orange', 'TX-ANNULE-00001', null, null) \g /dev/null
+reset role;
+update public.invoices set status = 'annule' where lease_id = 'f0000000-0000-4000-8000-000000000003';
+set role service_role;
+do $$
+declare v_inv uuid := (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000003');
+begin
+  assert public.confirm_provider_payment('cinetpay', 'TX-ANNULE-00001', 85000, 'XOF', 'orange', '1.2.3.4', '{}') = 'anomalie_avis_annule', 'S3 : issue attendue';
+  assert (select status from public.payments where provider_transaction_id = 'TX-ANNULE-00001') = 'reussi', 'S3 : encaissement non tracé';
+  assert (select amount_paid from public.invoices where id = v_inv) = 0, 'S3 : avis annulé imputé';
+  assert not exists (select 1 from public.receipts where invoice_id = v_inv), 'S3 : quittance sur avis annulé';
+  assert public.confirm_provider_payment('cinetpay', 'TX-ANNULE-00001', 85000, 'XOF', 'orange', '1.2.3.4', '{}') = 'deja_traite', 'S3 : rejeu';
+  raise notice 'OK  S3 avis annulé : encaissement tracé en anomalie, ni imputation ni quittance, webhook non bloqué';
+end $$;
+reset role;
+
+-- S4 : quittance v2 — toute altération d'un champ affiché est détectée
+do $$
+declare q public.receipts := (select r from public.receipts r where signature_version = 2 limit 1); v record;
+begin
+  assert q.id is not null, 'S4 : aucune quittance v2 émise';
+  select * into v from public.verify_receipt(q.id, left(q.signature, 16));
+  assert v.verdict = 'authentique', 'S4 : quittance v2 intacte non reconnue : ' || v.verdict;
+end $$;
+alter table public.receipts disable trigger receipts_immutable;
+update public.receipts set landlord_name = 'ESCROC SARL' where signature_version = 2;
+alter table public.receipts enable trigger receipts_immutable;
+do $$
+declare q public.receipts := (select r from public.receipts r where signature_version = 2 limit 1); v record;
+begin
+  select * into v from public.verify_receipt(q.id, left(q.signature, 16));
+  assert v.verdict = 'alteree', 'S4 : bailleur falsifié non détecté : ' || v.verdict;
+end $$;
+alter table public.receipts disable trigger receipts_immutable;
+update public.receipts set landlord_name = 'Akwaba Immobilier', payment_methods = 'especes' where signature_version = 2;
+alter table public.receipts enable trigger receipts_immutable;
+do $$
+declare q public.receipts := (select r from public.receipts r where signature_version = 2 limit 1); v record;
+begin
+  select * into v from public.verify_receipt(q.id, left(q.signature, 16));
+  assert v.verdict = 'alteree', 'S4 : mode de règlement falsifié non détecté : ' || v.verdict;
+  raise notice 'OK  S4 quittance v2 : bailleur et mode de règlement signés (altérations détectées)';
+end $$;
+
+-- S5 : chaînage d'audit v2 — le user_agent est couvert
+do $$ begin
+  assert not exists (select 1 from private.verify_audit_chain() where reason <> 'contenu altéré' or broken_at_seq > 4),
+    'S5 : chaîne mixte v1/v2 invalide hors altération volontaire précédente';
+end $$;
+alter table public.audit_logs disable trigger audit_logs_no_update;
+update public.audit_logs set ip = '102.0.0.66' where host(ip) = '8.8.8.8';
+alter table public.audit_logs enable trigger audit_logs_no_update;
+do $$ begin
+  assert not exists (select 1 from private.verify_audit_chain()), 'S5 : chaîne mixte v1/v2 non intègre';
+  assert exists (select 1 from public.audit_logs where hash_version = 2), 'S5 : aucune ligne v2';
+end $$;
+alter table public.audit_logs disable trigger audit_logs_no_update;
+update public.audit_logs set user_agent = 'falsifié' where chain_seq = (select max(chain_seq) from public.audit_logs where hash_version = 2);
+alter table public.audit_logs enable trigger audit_logs_no_update;
+do $$
+declare b record;
+begin
+  select * into b from private.verify_audit_chain();
+  assert b.reason = 'contenu altéré', 'S5 : altération du user_agent non détectée';
+  raise notice 'OK  S5 audit v2 : altération du user_agent détectée au maillon %', b.broken_at_seq;
 end $$;
 
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

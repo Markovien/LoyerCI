@@ -21,14 +21,6 @@ export function supabaseAdmin(): SupabaseClient {
   return admin;
 }
 
-/** Client anonyme sans session (page publique de vérification). */
-export function supabaseAnon(): SupabaseClient {
-  const env = serverEnv();
-  return createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
 /** Traduit les codes d'erreur PostgreSQL levés par les fonctions métier en messages sûrs. */
 export function dbErrorMessage(error: { code?: string; message?: string } | null): string {
   switch (error?.code) {

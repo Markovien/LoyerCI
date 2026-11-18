@@ -18,6 +18,9 @@ export function sniffProof(bytes: Uint8Array): ProofKind | null {
 
 /** Refuse les PDF contenant du JavaScript ou des actions automatiques (vecteurs d'attaque courants). */
 export function pdfLooksActive(bytes: Uint8Array): boolean {
-  const text = Buffer.from(bytes).toString("latin1");
-  return /\/(JavaScript|JS|OpenAction|Launch|EmbeddedFile|AA)\b/.test(text);
+  // Les noms PDF acceptent les échappements « #xx » (/J#61vaScript = /JavaScript) : on les décode.
+  const text = Buffer.from(bytes)
+    .toString("latin1")
+    .replace(/#([0-9a-fA-F]{2})/g, (_, h: string) => String.fromCharCode(parseInt(h, 16)));
+  return /\/(JavaScript|JS|OpenAction|Launch|EmbeddedFile|AA|RichMedia|XFA|SubmitForm|ImportData|GoToR|GoToE)\b/.test(text);
 }

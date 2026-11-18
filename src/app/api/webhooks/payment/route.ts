@@ -91,18 +91,32 @@ export async function POST(request: NextRequest) {
       outcome = "en_attente";
     }
   } catch (e) {
-    const retriable = !(e instanceof ProviderError) || e.retriable;
+    // Erreur métier/données côté base (classes SQLSTATE 22, 23, 42, P0) : la réémission
+    // échouerait à l'identique. On la trace au lieu de répondre 503 en boucle.
+    const retriable = e instanceof ProviderError ? e.retriable : !isPermanentDbError(e);
+    if (!retriable) console.error(`[webhook] rejet définitif · tx=${transactionId} · ${errorText(e)}`);
     if (retriable) {
       // On libère la clé pour que la réémission du fournisseur soit retraitée.
       await admin.from("webhook_events").delete().eq("provider", providerName).eq("event_key", eventKey).is("processed_at", null);
       return new NextResponse("temporary error", { status: 503 });
     }
     await admin.from("webhook_events")
-      .update({ outcome: `rejete: ${e instanceof Error ? e.message : "inconnu"}`.slice(0, 300), processed_at: new Date().toISOString() })
+      .update({ outcome: `rejete: ${errorText(e)}`.slice(0, 300), processed_at: new Date().toISOString() })
       .eq("provider", providerName).eq("event_key", eventKey);
     return NextResponse.json({ status: "rejected" });
   }
 
   await admin.from("webhook_events").update({ outcome, processed_at: new Date().toISOString() }).eq("provider", providerName).eq("event_key", eventKey);
   return NextResponse.json({ status: outcome });
+}
+
+function isPermanentDbError(e: unknown): boolean {
+  const code = typeof e === "object" && e !== null && "code" in e ? (e as { code?: unknown }).code : undefined;
+  return typeof code === "string" && /^(22|23|42|P0)/.test(code);
+}
+
+function errorText(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "object" && e !== null && "message" in e) return String((e as { message?: unknown }).message);
+  return "inconnu";
 }

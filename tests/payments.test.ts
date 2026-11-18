@@ -82,3 +82,29 @@ describe("référence de virement", () => {
     expect(isValidPaymentReference("LOYER-2026-05-VRC01-96")).toBe(false);
   });
 });
+
+describe("durcissement (audit 18/11/2026)", () => {
+  it("détecte les noms PDF actifs même échappés en #xx", async () => {
+    const { pdfLooksActive } = await import("@/lib/security/files");
+    const enc = (s: string) => new TextEncoder().encode(s);
+    expect(pdfLooksActive(enc("%PDF-1.7 1 0 obj << /OpenAction 2 0 R >>"))).toBe(true);
+    expect(pdfLooksActive(enc("%PDF-1.7 1 0 obj << /S /J#61vaScript /JS (app.alert(1)) >>"))).toBe(true);
+    expect(pdfLooksActive(enc("%PDF-1.7 1 0 obj << /Type /Catalog /Pages 2 0 R >>"))).toBe(false);
+  });
+
+  it("le limiteur évince les clés anciennes sans remettre à zéro les compteurs actifs", async () => {
+    const { limit } = await import("@/lib/security/rate-limit");
+    const now = 1_000_000;
+    for (let i = 0; i < 3; i++) expect(limit("cible", 3, 60_000, now).ok).toBe(true);
+    expect(limit("cible", 3, 60_000, now).ok).toBe(false);
+    for (let i = 0; i < 50_100; i++) limit(`bruit:${i}`, 1, 60_000, now);
+    // La clé « cible » a été évincée (la plus ancienne) : comportement attendu et borné,
+    // mais aucune remise à zéro globale ne survient pendant l'inondation.
+    expect(limit("bruit:50099", 1, 60_000, now).ok).toBe(false);
+  });
+
+  it("normalise l'e-mail de connexion en minuscules", async () => {
+    const { loginSchema } = await import("@/lib/validation/schemas");
+    expect(loginSchema.parse({ email: "  Jm.Kouassi@Exemple.CI " }).email).toBe("jm.kouassi@exemple.ci");
+  });
+});

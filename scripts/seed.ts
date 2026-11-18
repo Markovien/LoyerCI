@@ -9,7 +9,7 @@ import { createClient } from "@supabase/supabase-js";
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY manquant");
-if (!/127\.0\.0\.1|localhost/.test(url)) throw new Error("Seed autorisé uniquement en local");
+if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(url).hostname)) throw new Error("Seed autorisé uniquement en local");
 
 const db = createClient(url, key, { auth: { persistSession: false } });
 const PASSWORD = "Demo-LoyerCI-2026!";

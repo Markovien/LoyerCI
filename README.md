@@ -4,7 +4,7 @@ PWA Next.js 16 + Supabase : avis d'échéance partagés par WhatsApp, paiement M
 (Orange Money, MTN MoMo, Wave, Moov Money via CinetPay) ou virement avec référence unique,
 quittances signées vérifiables par QR code. Devise : franc CFA (XOF), montants entiers.
 
-👉 Lire d'abord **[docs/ANALYSE.md](docs/ANALYSE.md)** (modèle de sécurité), **[docs/ETUDE-PAIEMENT-DIRECT.md](docs/ETUDE-PAIEMENT-DIRECT.md)** (paiement sans agrégateur) et **[ROADMAP.md](ROADMAP.md)** (suite du développement, à donner à Claude Code avec `CLAUDE.md`).
+👉 Lire d'abord **[docs/ANALYSE.md](docs/ANALYSE.md)** (modèle de sécurité), **[docs/AUDIT-SECURITE.md](docs/AUDIT-SECURITE.md)** (audit du 18/11/2026), **[docs/ETUDE-PAIEMENT-DIRECT.md](docs/ETUDE-PAIEMENT-DIRECT.md)** (paiement sans agrégateur) et **[ROADMAP.md](ROADMAP.md)** (suite du développement, à donner à Claude Code avec `CLAUDE.md`).
 
 ## Démarrage local
 
@@ -24,7 +24,7 @@ propriétaire `adjoua.coulibaly@akwaba-immo.ci`, locataire `jm.kouassi@exemple.c
 ## Tests
 
 ```bash
-npm run test:db     # 34 scénarios de sécurité sur un PostgreSQL éphémère (RLS, idempotence, audit…)
+npm run test:db     # 43 scénarios de sécurité sur un PostgreSQL éphémère (RLS, idempotence, audit, privilèges…)
 npm test            # tests unitaires (HMAC, Zod, références, formats)
 npm run typecheck && npm run build
 ```
@@ -76,7 +76,7 @@ loyerci/
 ## Mise en production — liste de contrôle
 
 - [ ] Secret Vault `receipt_signing_key` aléatoire (64 hex) : `select vault.create_secret(encode(gen_random_bytes(32),'hex'),'receipt_signing_key');`
-- [ ] `SUPABASE_SERVICE_ROLE_KEY` et `CINETPAY_SECRET_KEY` uniquement côté serveur
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` et `CINETPAY_SECRET_KEY` uniquement côté serveur (CinetPay : les trois clés ou aucune)
 - [ ] `CLIENT_IP_HEADER` adapté à l'hébergeur (Vercel : `x-real-ip`)
 - [ ] URL de notification CinetPay : `https://<domaine>/api/webhooks/payment?provider=cinetpay`
 - [ ] Limiteur de débit Redis, OTP SMS, alertes de changement de RIB

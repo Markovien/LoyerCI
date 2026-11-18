@@ -12,10 +12,15 @@ const serverSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.url(),
   CLIENT_IP_HEADER: z.enum(["x-real-ip", "cf-connecting-ip", "x-forwarded-for"]).default("x-real-ip"),
   TRUSTED_PROXY_HOPS: z.coerce.number().int().min(1).max(5).default(1),
-  CINETPAY_API_KEY: z.string().min(10),
-  CINETPAY_SITE_ID: z.string().regex(/^\d{4,12}$/),
-  CINETPAY_SECRET_KEY: z.string().min(16),
-});
+  // CinetPay est optionnel (décision produit du 18/11/2026) : soit les trois clés, soit aucune.
+  CINETPAY_API_KEY: z.string().min(10).optional(),
+  CINETPAY_SITE_ID: z.string().regex(/^\d{4,12}$/).optional(),
+  CINETPAY_SECRET_KEY: z.string().min(16).optional(),
+}).refine(
+  (e) => [e.CINETPAY_API_KEY, e.CINETPAY_SITE_ID, e.CINETPAY_SECRET_KEY].every((v) => v === undefined)
+    || [e.CINETPAY_API_KEY, e.CINETPAY_SITE_ID, e.CINETPAY_SECRET_KEY].every((v) => v !== undefined),
+  { message: "CinetPay : renseigner les trois clés ou aucune", path: ["CINETPAY_API_KEY"] },
+);
 
 export type ServerEnv = z.infer<typeof serverSchema>;
 
@@ -23,7 +28,9 @@ let cached: ServerEnv | undefined;
 
 export function serverEnv(): ServerEnv {
   if (!cached) {
-    const parsed = serverSchema.safeParse(process.env);
+    // Une variable vide (« CINETPAY_API_KEY= ») vaut « absente ».
+    const env = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== ""));
+    const parsed = serverSchema.safeParse(env);
     if (!parsed.success) {
       const keys = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
       throw new Error(`Configuration serveur invalide : ${keys}`);

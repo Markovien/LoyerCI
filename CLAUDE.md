@@ -3,7 +3,7 @@
 Projet : **LoyerCI**, une PWA de gestion locative pour la Côte d'Ivoire (devise XOF, montants entiers).
 Stack : Next.js 16 (App Router, `src/proxy.ts` remplace `middleware.ts`), TypeScript strict, Tailwind v4, composants de style shadcn/ui, Supabase (PostgreSQL, Auth, Storage, Realtime) et Zod 4.
 
-**À lire avant toute tâche :** `ROADMAP.md` (quoi faire, dans quel ordre), `docs/ANALYSE.md` (modèle de sécurité) et `docs/ETUDE-PAIEMENT-DIRECT.md` (stratégie de paiement).
+**À lire avant toute tâche :** `ROADMAP.md` (quoi faire, dans quel ordre), `docs/ANALYSE.md` (modèle de sécurité), `docs/AUDIT-SECURITE.md` (failles corrigées et risques ouverts) et `docs/ETUDE-PAIEMENT-DIRECT.md` (stratégie de paiement).
 
 ## Commandes
 
@@ -31,6 +31,8 @@ Une tâche n'est **terminée** que si ces quatre commandes passent. Chaque nouve
 10. **La clé `service_role` et les secrets ne quittent pas le serveur** : modules marqués `import "server-only"`, jamais de préfixe `NEXT_PUBLIC_`.
 11. **Validation Zod** de toute entrée (Server Actions, routes, paramètres d'URL). Les Server Actions sont des endpoints publics : vérifier session, débit et entrée dans chacune.
 12. **Fichiers téléversés** : type déterminé par les octets magiques (`src/lib/security/files.ts`), nom généré par le serveur, bucket privé, lecture par URL signée de 60 s après journalisation.
+13. **Rien n'est exposé implicitement** : depuis la migration `…0500_security_hardening`, les nouvelles tables et fonctions ne sont accessibles à `anon`/`authenticated` que par `GRANT` explicite. Toute fonction exécutable par `authenticated` doit être ajoutée **consciemment** à la liste blanche du garde-fou de `01_security_scenarios.sql` ; `anon` n'exécute **aucune** fonction (même `verify_receipt` passe par le serveur).
+14. **Signatures versionnées** : quittances (`signature_version`) et audit (`hash_version`). Toute évolution du contenu signé crée une nouvelle version ; les anciennes restent vérifiables. La signature couvre **tous** les champs affichés ou imprimés.
 
 ## Conventions
 

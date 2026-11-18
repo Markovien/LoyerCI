@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabaseAnon } from "@/lib/supabase/admin";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { clientIpFrom } from "@/lib/security/request-context";
 import { limit } from "@/lib/security/rate-limit";
 import { serverEnv } from "@/lib/env";
@@ -24,7 +24,7 @@ type View = { kind: "form"; error?: string } | { kind: "throttled" } | { kind: "
 
 /**
  * Page publique (sans connexion), cible du QR code : /verify/<id>?c=<code>.
- * - aucune lecture de table : uniquement la fonction verify_receipt() exposée à « anon » ;
+ * - aucune lecture de table : uniquement la fonction verify_receipt(), appelée côté serveur ;
  * - données renvoyées déjà masquées par la base (le nom complet ne quitte jamais le serveur SQL) ;
  * - même réponse pour « inconnu » et « code faux » (aucun oracle d'énumération) ;
  * - débit limité par IP.
@@ -38,7 +38,9 @@ async function resolve(receiptId: string, code: string | undefined): Promise<Vie
   const ip = clientIpFrom(await headers(), env.CLIENT_IP_HEADER, env.TRUSTED_PROXY_HOPS);
   if (!limit(`verify:${ip ?? "?"}`, 20, 60_000).ok) return { kind: "throttled" };
 
-  const { data, error } = await supabaseAnon()
+  // verify_receipt n'est exécutable que par service_role (pas d'appel PostgREST direct
+  // qui contournerait ce limiteur) ; elle ne renvoie que des données masquées.
+  const { data, error } = await supabaseAdmin()
     .rpc("verify_receipt", { p_id: parsed.data.receiptId, p_code: parsed.data.code })
     .single<VerifyReceiptResult>();
   if (error || !data) return { kind: "result", r: { verdict: "invalide" } as VerifyReceiptResult };

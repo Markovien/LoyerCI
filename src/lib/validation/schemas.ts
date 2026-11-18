@@ -85,7 +85,7 @@ export const verifyParamsSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  email: z.email({ error: "Adresse e-mail invalide" }).max(200),
+  email: z.string().trim().toLowerCase().pipe(z.email({ error: "Adresse e-mail invalide" }).max(200)),
   next: z
     .string()
     .optional()
