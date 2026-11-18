@@ -1,8 +1,9 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/db";
 import { serverEnv } from "@/lib/env";
 
-let admin: SupabaseClient | undefined;
+let admin: SupabaseClient<Database> | undefined;
 
 /**
  * Client service_role. Usage STRICTEMENT limité :
@@ -11,10 +12,10 @@ let admin: SupabaseClient | undefined;
  * Ne jamais l'utiliser pour des lectures « pratiques » qui contourneraient la RLS.
  * Le module « server-only » fait échouer le build s'il est importé côté client.
  */
-export function supabaseAdmin(): SupabaseClient {
+export function supabaseAdmin(): SupabaseClient<Database> {
   if (!admin) {
     const env = serverEnv();
-    admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+    admin = createClient<Database>(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
   }

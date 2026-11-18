@@ -29,16 +29,16 @@ export default async function PayPage({ params }: { params: Promise<{ invoiceId:
     .from("invoices")
     .select("id, org_id, period, amount_due, amount_paid, due_date, status, payment_reference, organizations(name), tenants(full_name, phone), leases(properties(label, commune, quartier, city)), payments(id, method, status, amount, created_at, failure_reason)")
     .eq("id", invoiceId)
-    .maybeSingle<TenantInvoiceRow>();
+    .maybeSingle();
   if (!inv) notFound();
 
   const remaining = inv.amount_due - inv.amount_paid;
   const payable = inv.status !== "paye" && inv.status !== "annule" && remaining > 0;
 
   const [{ data: receipt }, { data: tr }] = await Promise.all([
-    supabase.from("receipts").select("id, receipt_number").eq("invoice_id", inv.id).maybeSingle<{ id: string; receipt_number: string }>(),
+    supabase.from("receipts").select("id, receipt_number").eq("invoice_id", inv.id).maybeSingle(),
     payable
-      ? supabase.rpc("get_transfer_instructions", { p_invoice: inv.id }).maybeSingle<{ account_holder: string; bank_name: string; iban: string; payment_reference: string }>()
+      ? supabase.rpc("get_transfer_instructions", { p_invoice: inv.id }).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
   const transfer: TransferInfo | null = tr ? { accountHolder: tr.account_holder, bankName: tr.bank_name, iban: tr.iban, reference: tr.payment_reference } : null;

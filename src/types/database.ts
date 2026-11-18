@@ -1,13 +1,15 @@
 /**
- * Types métier (sous-ensemble). En production, générer les types complets avec :
- *   npx supabase gen types typescript --local > src/types/supabase.ts
- * et typer les clients : createServerClient<Database>(...)
+ * Formes des requêtes imbriquées utilisées par les composants. Les énumérations
+ * dérivent des types générés (src/types/supabase.ts, via src/types/db.ts) :
+ * toute divergence avec la base fait échouer `npm run typecheck`.
  */
-export type MemberRole = "owner" | "manager" | "accountant";
-export type InvoiceStatus = "a_payer" | "partiel" | "en_retard" | "paye" | "annule";
-export type PaymentStatus = "initie" | "en_attente_validation" | "reussi" | "echoue" | "rejete";
-export type PaymentMethod = "mobile_money" | "virement" | "especes";
-export type PropertyType = "appartement" | "villa" | "studio" | "magasin" | "bureau" | "entrepot";
+import type { Enums } from "./db";
+
+export type MemberRole = Enums<"member_role">;
+export type InvoiceStatus = Enums<"invoice_status">;
+export type PaymentStatus = Enums<"payment_status">;
+export type PaymentMethod = Enums<"payment_method">;
+export type PropertyType = Enums<"property_type">;
 
 export interface DashboardKpis {
   collected: number;

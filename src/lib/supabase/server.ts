@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import type { Database } from "@/types/db";
 
 /**
  * Client « utilisateur » côté serveur : porte le JWT de la session (cookies).
@@ -8,7 +9,7 @@ import { createServerClient } from "@supabase/ssr";
  */
 export async function createSupabaseServer() {
   const cookieStore = await cookies();
-  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  return createServerClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
     cookies: {
       getAll: () => cookieStore.getAll(),
       setAll: (toSet) => {

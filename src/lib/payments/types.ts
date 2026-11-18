@@ -1,4 +1,5 @@
 import type { MobileOperator } from "@/lib/validation/schemas";
+import type { Json } from "@/types/db";
 
 export type ProviderName = "cinetpay" | "wave" | "pispi";
 
@@ -20,7 +21,7 @@ export interface VerifiedTransaction {
   amount: number;
   currency: string;
   operator: MobileOperator | null;
-  raw: Record<string, unknown>;
+  raw: { [key: string]: Json | undefined };
 }
 
 export interface WebhookNotification {

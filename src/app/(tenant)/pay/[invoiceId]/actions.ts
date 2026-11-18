@@ -35,7 +35,7 @@ export async function initiateMobileMoneyPayment(input: unknown): Promise<PayRes
     .from("invoices")
     .select("id, period, payment_reference, tenants(full_name, phone)")
     .eq("id", invoiceId)
-    .maybeSingle<{ id: string; period: string; payment_reference: string; tenants: { full_name: string; phone: string } | null }>();
+    .maybeSingle();
   if (!invoice) return { ok: false, message: "Avis introuvable." };
 
   const ctx = await requestContext();
@@ -47,7 +47,7 @@ export async function initiateMobileMoneyPayment(input: unknown): Promise<PayRes
       p_actor: user.id, p_invoice: invoiceId, p_provider: provider.name, p_operator: operator,
       p_tx_id: newTransactionId(), p_ip: ctx.ip, p_ua: ctx.userAgent,
     })
-    .single<{ payment_id: string; transaction_id: string; amount: number; reused: boolean; checkout_url: string | null }>();
+    .single();
   if (error || !intent) return { ok: false, message: dbErrorMessage(error) };
 
   // Double clic / retour arrière : on renvoie vers la même session de paiement.
@@ -111,7 +111,7 @@ export async function submitTransferProof(_: ProofState, formData: FormData): Pr
     .from("invoices")
     .select("id, org_id")
     .eq("id", parsed.data.invoiceId)
-    .maybeSingle<{ id: string; org_id: string }>();
+    .maybeSingle();
   if (!invoice) return { ok: false, message: "Avis introuvable." };
 
   // Nom de fichier généré côté serveur : jamais le nom fourni par l'utilisateur.

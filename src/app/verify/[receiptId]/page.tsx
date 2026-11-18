@@ -9,6 +9,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { clientIpFrom } from "@/lib/security/request-context";
 import { limit } from "@/lib/security/rate-limit";
 import { serverEnv } from "@/lib/env";
+import { z } from "zod";
 import { uuid, verifyParamsSchema } from "@/lib/validation/schemas";
 import type { VerifyReceiptResult } from "@/types/database";
 import { Verdict } from "./verdict";
@@ -19,6 +20,8 @@ export const metadata: Metadata = {
   referrer: "no-referrer",
 };
 export const dynamic = "force-dynamic";
+
+const verdictSchema = z.enum(["authentique", "annulee", "invalide", "alteree"]);
 
 type View = { kind: "form"; error?: string } | { kind: "throttled" } | { kind: "result"; r: VerifyReceiptResult };
 
@@ -42,9 +45,12 @@ async function resolve(receiptId: string, code: string | undefined): Promise<Vie
   // qui contournerait ce limiteur) ; elle ne renvoie que des données masquées.
   const { data, error } = await supabaseAdmin()
     .rpc("verify_receipt", { p_id: parsed.data.receiptId, p_code: parsed.data.code })
-    .single<VerifyReceiptResult>();
+    .single();
   if (error || !data) return { kind: "result", r: { verdict: "invalide" } as VerifyReceiptResult };
-  return { kind: "result", r: data };
+  // Le verdict est un « text » SQL : toute valeur inattendue est traitée comme invalide.
+  const verdict = verdictSchema.safeParse(data.verdict);
+  if (!verdict.success) return { kind: "result", r: { verdict: "invalide" } as VerifyReceiptResult };
+  return { kind: "result", r: { ...data, verdict: verdict.data } };
 }
 
 export default async function VerifyPage({ params, searchParams }: {

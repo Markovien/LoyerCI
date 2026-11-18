@@ -16,8 +16,7 @@ export default async function TenantHome() {
     .from("invoices")
     .select("id, period, amount_due, amount_paid, due_date, status, leases(properties(label, commune))")
     .order("period", { ascending: false })
-    .limit(24)
-    .overrideTypes<{ id: string; period: string; amount_due: number; amount_paid: number; due_date: string; status: InvoiceStatus; leases: { properties: { label: string; commune: string } | null } | null }[], { merge: false }>();
+    .limit(24);
 
   const rows = data ?? [];
   return (

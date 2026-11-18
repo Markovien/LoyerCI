@@ -34,14 +34,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   // Lectures avec le JWT de l'utilisateur : la RLS garantit le cloisonnement.
   const [kpis, invoices, transfers] = await Promise.all([
-    supabase.rpc("dashboard_kpis", { p_org: orgId, p_month: period }).single<DashboardKpis>(),
+    supabase.rpc("dashboard_kpis", { p_org: orgId, p_month: period }).single(),
     supabase
       .from("invoices")
       .select("id, period, amount_due, amount_paid, due_date, status, payment_reference, tenants(full_name, phone, email), leases(properties(code, label, commune, quartier, type))")
       .eq("org_id", orgId)
       .or(`period.eq.${period},status.eq.en_retard`)
-      .order("due_date")
-      .overrideTypes<InvoiceRow[], { merge: false }>(),
+      .order("due_date"),
     canValidate
       ? supabase
           .from("payments")
@@ -49,7 +48,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           .eq("org_id", orgId)
           .eq("status", "en_attente_validation")
           .order("created_at")
-          .overrideTypes<PendingTransferRow[], { merge: false }>()
       : Promise.resolve({ data: [] as PendingTransferRow[] }),
   ]);
 

@@ -31,8 +31,7 @@ export async function requireOrgMember(preferredOrgId?: string) {
     .from("memberships")
     .select("org_id, role, organizations(name, kind)")
     .eq("user_id", user.id)
-    .order("created_at")
-    .overrideTypes<OrgMembership[], { merge: false }>();
+    .order("created_at");
 
   const memberships = data ?? [];
   const current = memberships.find((m) => m.org_id === preferredOrgId) ?? memberships[0];

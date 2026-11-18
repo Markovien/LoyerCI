@@ -21,7 +21,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ rec
     .from("receipts")
     .select("id, receipt_number, landlord_name, tenant_name, property_label, property_location, period, rent_amount, charges_amount, amount, payment_methods, paid_at, content_hash, signature, status, issued_at")
     .eq("id", receiptId)
-    .maybeSingle<ReceiptRow>();
+    .maybeSingle();
   if (!receipt) return new NextResponse("Introuvable", { status: 404 });
   if (receipt.status !== "valide") return new NextResponse("Quittance annulée", { status: 410 });
 

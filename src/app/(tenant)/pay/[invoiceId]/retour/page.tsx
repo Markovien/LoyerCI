@@ -26,7 +26,7 @@ export default async function ReturnPage({ params }: { params: Promise<{ invoice
     .from("invoices")
     .select("id, status, amount_due, payments(status, method, amount, created_at)")
     .eq("id", invoiceId)
-    .maybeSingle<{ id: string; status: string; amount_due: number; payments: { status: string; method: string; amount: number; created_at: string }[] }>();
+    .maybeSingle();
   if (!inv) notFound();
 
   const last = inv.payments.filter((p) => p.method === "mobile_money").sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
