@@ -62,6 +62,14 @@ Chaque faille a été **démontrée** avant correction, puis le PoC a été rejo
 - **Problème :** les trois clés CinetPay étaient obligatoires dans la validation de l'environnement serveur, lue par **toutes** les Server Actions (`requestContext`). Avec la décision du 18/11/2026 (CinetPay désactivé par défaut), toute action aurait échoué : indisponibilité totale.
 - **Correctif :** clés optionnelles en « tout ou rien », variable vide = absente, `getProvider` échoue proprement (fail closed), action Mobile Money refusée si CinetPay n'est pas configuré.
 
+### 🟡 M5 — Temps réel inopérant (constaté en P0.1 sur un vrai Supabase)
+- **Problème :** le canal Realtime du tableau de bord s'abonnait avant le chargement de la session, donc avec le rôle `anon` : la RLS filtrait tous les événements alors que l'indicateur affichait « En direct ». Le bailleur croyait voir les paiements en direct et ne voyait rien.
+- **Correctif :** jeton de session transmis à Realtime (`realtime.setAuth`) avant l'abonnement et à chaque renouvellement. Vérifié : rafraîchissement d'un 2e onglet en < 1 s.
+
+### 🟡 M6 — Connexion impossible si l'on ferme l'inscription par la configuration e-mail (constaté en P0.1)
+- **Problème :** dans `config.toml`, `[auth.email] enable_signup` désactive le **fournisseur e-mail** entier (« Email logins are disabled »), pas seulement les inscriptions ; et l'action de connexion ignorait silencieusement l'erreur.
+- **Correctif :** inscription fermée par `[auth] enable_signup = false` ; fournisseur e-mail conservé ; erreurs d'Auth journalisées côté serveur (sans e-mail).
+
 ### 🟢 Faibles (corrigées)
 | # | Constat | Correctif |
 |---|---|---|

@@ -18,7 +18,11 @@ export async function sendMagicLink(_: LoginState, formData: FormData): Promise<
 
   const supabase = await createSupabaseServer();
   const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=${encodeURIComponent(parsed.data.next)}`;
-  await supabase.auth.signInWithOtp({ email: parsed.data.email, options: { emailRedirectTo: redirectTo, shouldCreateUser: false } });
+  const { error } = await supabase.auth.signInWithOtp({ email: parsed.data.email, options: { emailRedirectTo: redirectTo, shouldCreateUser: false } });
+  // Trace serveur sans donnée personnelle (pas d'e-mail) : une panne d'Auth ne doit pas passer inaperçue.
+  if (error && error.code !== "otp_disabled" && error.code !== "user_not_found") {
+    console.warn(`[login] échec d'envoi du lien · code=${error.code ?? "inconnu"} · statut=${error.status ?? "?"}`);
+  }
   // Réponse identique que le compte existe ou non (pas d'énumération des comptes).
   return { ok: true, message: "Si un compte existe pour cette adresse, un lien de connexion vient d'être envoyé." };
 }
