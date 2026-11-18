@@ -157,6 +157,12 @@ Référence : `docs/ETUDE-PAIEMENT-DIRECT.md` §5. **Aucune modification des mig
 
 ---
 
+## Décisions arbitrées (18/11/2026)
+
+- **Inscription** : invitation seule, inscription publique désactivée dans Supabase Auth.
+- **Espèces** : au-delà d'un seuil par organisation (défaut 100 000 FCFA), un encaissement déclaré par un comptable attend la confirmation d'un `owner` avant la quittance (à intégrer à `review_manual_payment` en P1.2) ; notification au locataire (P3.2).
+- **Hébergement** : Supabase en région UE (Francfort ou Paris) et Vercel, avec dossier de transfert ARTCI (P4.8).
+
 ## Questions ouvertes (à trancher par le porteur de projet)
 
 1. Périmètre exact de l'interdiction du QR PI-SPI à distance : une affiche dans le hall d'un immeuble compte-t-elle comme « présence physique » ? (à confirmer auprès de la BCEAO ou d'un participant)

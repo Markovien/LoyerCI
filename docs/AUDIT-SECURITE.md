@@ -101,7 +101,12 @@ Chaque faille a été **démontrée** avant correction, puis le PoC a été rejo
 | 🟢 Faible | Verrou consultatif global sur l'audit : sérialise toutes les écritures sensibles | Acceptable au volume du pilote ; à mesurer en P4.5 |
 | 🟢 Faible | `CLIENT_IP_HEADER` mal réglé = IP falsifiable (audit et limiteur) | Liste de contrôle de mise en production |
 
-### 3.2 Décisions à prendre par le porteur de projet
+### 3.2 Décisions du porteur de projet (arbitrées le 18/11/2026)
+> **D1 → invitation seule** : inscription publique désactivée (`supabase/config.toml`, P0.1) ; bailleurs créés par l'équipe LoyerCI, locataires et membres par lien d'invitation à usage unique (P2.2, P2.5).
+> **D2 → seuil + validation du propriétaire** : un encaissement en espèces déclaré par un comptable au-delà d'un seuil par organisation (défaut 100 000 FCFA) n'émet la quittance qu'après confirmation d'un `owner` ; le locataire est notifié (P3.2). Mis en œuvre avec `review_manual_payment` (P1.2).
+> **D3 → Supabase en région UE + dossier ARTCI** : Supabase géré (Francfort ou Paris) et hébergement applicatif Vercel (`CLIENT_IP_HEADER=x-real-ip`), avec demande d'autorisation de transfert à l'ARTCI et clauses contractuelles, à faire valider par un juriste (P4.8).
+
+Contexte des décisions :
 | # | Sujet | Enjeu |
 |---|---|---|
 | D1 | **Inscription ouverte dans Supabase Auth** : aucun `supabase/config.toml` n'existe ; par défaut, n'importe qui peut créer un compte via l'API Auth avec la clé publique | Désactiver l'inscription (comptes créés par invitation) ou ouvrir l'inscription aux bailleurs |
