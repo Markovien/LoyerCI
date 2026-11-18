@@ -44,7 +44,9 @@ export const initiateMobileMoneySchema = z.object({
 export const transferProofSchema = z.object({
   invoiceId: uuid,
   amount: amountXOF,
-  bankReference: safeText(80).optional().transform((v) => (v ? v : undefined)),
+  bankReference: safeText(80)
+    .optional()
+    .transform((v) => (v ? v : undefined)),
 });
 
 export const reviewTransferSchema = z
@@ -86,7 +88,11 @@ export const verifyParamsSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  email: z.string().trim().toLowerCase().pipe(z.email({ error: "Adresse e-mail invalide" }).max(200)),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .pipe(z.email({ error: "Adresse e-mail invalide" }).max(200)),
   next: z
     .string()
     .optional()

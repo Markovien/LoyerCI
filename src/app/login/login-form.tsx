@@ -15,8 +15,15 @@ export function LoginForm({ next }: { next?: string }) {
         <Label htmlFor="email">Adresse e-mail</Label>
         <Input id="email" name="email" type="email" autoComplete="email" required placeholder="vous@exemple.ci" />
       </div>
-      <Button type="submit" size="lg" disabled={pending}><Mail />{pending ? "Envoi…" : "Recevoir mon lien de connexion"}</Button>
-      {state && <p role="status" className={state.ok ? "text-sm text-success" : "text-sm text-danger"}>{state.message}</p>}
+      <Button type="submit" size="lg" disabled={pending}>
+        <Mail />
+        {pending ? "Envoi…" : "Recevoir mon lien de connexion"}
+      </Button>
+      {state && (
+        <p role="status" className={state.ok ? "text-sm text-success" : "text-sm text-danger"}>
+          {state.message}
+        </p>
+      )}
     </form>
   );
 }

@@ -63,8 +63,13 @@ export async function POST(request: NextRequest) {
   const { data: inserted, error: insErr } = await admin
     .from("webhook_events")
     .upsert(
-      { provider: providerName, event_key: eventKey, transaction_id: transactionId, signature_valid: true,
-        payload: Object.fromEntries(new URLSearchParams(rawBody)) },
+      {
+        provider: providerName,
+        event_key: eventKey,
+        transaction_id: transactionId,
+        signature_valid: true,
+        payload: Object.fromEntries(new URLSearchParams(rawBody)),
+      },
       { onConflict: "provider,event_key", ignoreDuplicates: true },
     )
     .select("id");
@@ -76,14 +81,22 @@ export async function POST(request: NextRequest) {
     const tx = await provider.verifyTransaction(transactionId);
     if (tx.status === "accepted") {
       const { data, error } = await admin.rpc("confirm_provider_payment", {
-        p_provider: providerName, p_tx_id: transactionId, p_amount: tx.amount, p_currency: tx.currency,
-        p_operator: tx.operator, p_ip: ip, p_meta: { verification: tx.raw },
+        p_provider: providerName,
+        p_tx_id: transactionId,
+        p_amount: tx.amount,
+        p_currency: tx.currency,
+        p_operator: tx.operator,
+        p_ip: ip,
+        p_meta: { verification: tx.raw },
       });
       if (error) throw error;
       outcome = String(data);
     } else if (tx.status === "refused") {
       const { data, error } = await admin.rpc("fail_provider_payment", {
-        p_provider: providerName, p_tx_id: transactionId, p_reason: "refuse_par_operateur", p_ip: ip,
+        p_provider: providerName,
+        p_tx_id: transactionId,
+        p_reason: "refuse_par_operateur",
+        p_ip: ip,
       });
       if (error) throw error;
       outcome = String(data);
@@ -100,13 +113,19 @@ export async function POST(request: NextRequest) {
       await admin.from("webhook_events").delete().eq("provider", providerName).eq("event_key", eventKey).is("processed_at", null);
       return new NextResponse("temporary error", { status: 503 });
     }
-    await admin.from("webhook_events")
+    await admin
+      .from("webhook_events")
       .update({ outcome: `rejete: ${errorText(e)}`.slice(0, 300), processed_at: new Date().toISOString() })
-      .eq("provider", providerName).eq("event_key", eventKey);
+      .eq("provider", providerName)
+      .eq("event_key", eventKey);
     return NextResponse.json({ status: "rejected" });
   }
 
-  await admin.from("webhook_events").update({ outcome, processed_at: new Date().toISOString() }).eq("provider", providerName).eq("event_key", eventKey);
+  await admin
+    .from("webhook_events")
+    .update({ outcome, processed_at: new Date().toISOString() })
+    .eq("provider", providerName)
+    .eq("event_key", eventKey);
   return NextResponse.json({ status: outcome });
 }
 

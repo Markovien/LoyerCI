@@ -12,9 +12,22 @@ const API = "https://api-checkout.cinetpay.com/v2";
  * (docs.cinetpay.com › Checkout › X-TOKEN HMAC).
  */
 export const CINETPAY_HMAC_FIELDS = [
-  "cpm_site_id", "cpm_trans_id", "cpm_trans_date", "cpm_amount", "cpm_currency", "signature",
-  "payment_method", "cel_phone_num", "cpm_phone_prefixe", "cpm_language", "cpm_version",
-  "cpm_payment_config", "cpm_page_action", "cpm_custom", "cpm_designation", "cpm_error_message",
+  "cpm_site_id",
+  "cpm_trans_id",
+  "cpm_trans_date",
+  "cpm_amount",
+  "cpm_currency",
+  "signature",
+  "payment_method",
+  "cel_phone_num",
+  "cpm_phone_prefixe",
+  "cpm_language",
+  "cpm_version",
+  "cpm_payment_config",
+  "cpm_page_action",
+  "cpm_custom",
+  "cpm_designation",
+  "cpm_error_message",
 ] as const;
 
 export function cinetpayToken(form: URLSearchParams, secret: string): string {

@@ -43,14 +43,20 @@ async function main() {
 
   console.log("→ Organisation");
   const [org] = await must(
-    db.from("organizations").insert({ name: "Akwaba Immobilier", kind: "agence", receipt_prefix: "AKW", contact_phone: "2252722445566" }).select("id"),
+    db
+      .from("organizations")
+      .insert({ name: "Akwaba Immobilier", kind: "agence", receipt_prefix: "AKW", contact_phone: "2252722445566" })
+      .select("id"),
     "organisation",
   );
   const orgId = org!.id as string;
-  await must(db.from("memberships").insert([
-    { org_id: orgId, user_id: owner, role: "owner" },
-    { org_id: orgId, user_id: accountant, role: "accountant" },
-  ]), "membres");
+  await must(
+    db.from("memberships").insert([
+      { org_id: orgId, user_id: owner, role: "owner" },
+      { org_id: orgId, user_id: accountant, role: "accountant" },
+    ]),
+    "membres",
+  );
 
   console.log("→ Biens");
   const properties = [
@@ -59,7 +65,14 @@ async function main() {
     { code: "STU04", label: "Studio meublé", type: "studio", city: "Abidjan", commune: "Yopougon", quartier: "Selmer" },
     { code: "MAG03", label: "Magasin 40 m²", type: "magasin", city: "Abidjan", commune: "Plateau", quartier: "Avenue Chardy" },
     { code: "BUR02", label: "Plateau de bureaux 60 m²", type: "bureau", city: "Abidjan", commune: "Plateau", quartier: "Rue du Commerce" },
-    { code: "VBA07", label: "Villa basse 4 pièces", type: "villa", city: "Bingerville", commune: "Bingerville", quartier: "Cité Feh Kessé" },
+    {
+      code: "VBA07",
+      label: "Villa basse 4 pièces",
+      type: "villa",
+      city: "Bingerville",
+      commune: "Bingerville",
+      quartier: "Cité Feh Kessé",
+    },
     { code: "APT05", label: "Appartement 2 pièces", type: "appartement", city: "Bouaké", commune: "Bouaké", quartier: "Commerce" },
     { code: "APT21", label: "Appartement 4 pièces", type: "appartement", city: "Abidjan", commune: "Cocody", quartier: "Angré 8e Tranche" },
   ].map((p) => ({ ...p, org_id: orgId }));
@@ -67,15 +80,21 @@ async function main() {
   const pid = (code: string) => props.find((p) => p.code === code)!.id as string;
 
   console.log("→ Locataires");
-  const tenants = await must(db.from("tenants").insert([
-    { org_id: orgId, user_id: kouassi, full_name: "Kouassi Jean-Marc", phone: "2250707123456", email: "jm.kouassi@exemple.ci" },
-    { org_id: orgId, user_id: traore, full_name: "Traoré Mariam", phone: "2250505987654", email: "mariam.traore@exemple.ci" },
-    { org_id: orgId, full_name: "Koné Ibrahim", phone: "2250101445566" },
-    { org_id: orgId, full_name: "Bamba & Fils SARL", phone: "2250707889900", email: "contact@bamba-fils.ci" },
-    { org_id: orgId, full_name: "Cabinet N'Guessan & Associés", phone: "2252720301122", email: "cabinet@nguessan-avocats.ci" },
-    { org_id: orgId, full_name: "Yao Affoué Christelle", phone: "2250566778899" },
-    { org_id: orgId, full_name: "Ouattara Seydou", phone: "2250102030405" },
-  ]).select("id, full_name"), "locataires");
+  const tenants = await must(
+    db
+      .from("tenants")
+      .insert([
+        { org_id: orgId, user_id: kouassi, full_name: "Kouassi Jean-Marc", phone: "2250707123456", email: "jm.kouassi@exemple.ci" },
+        { org_id: orgId, user_id: traore, full_name: "Traoré Mariam", phone: "2250505987654", email: "mariam.traore@exemple.ci" },
+        { org_id: orgId, full_name: "Koné Ibrahim", phone: "2250101445566" },
+        { org_id: orgId, full_name: "Bamba & Fils SARL", phone: "2250707889900", email: "contact@bamba-fils.ci" },
+        { org_id: orgId, full_name: "Cabinet N'Guessan & Associés", phone: "2252720301122", email: "cabinet@nguessan-avocats.ci" },
+        { org_id: orgId, full_name: "Yao Affoué Christelle", phone: "2250566778899" },
+        { org_id: orgId, full_name: "Ouattara Seydou", phone: "2250102030405" },
+      ])
+      .select("id, full_name"),
+    "locataires",
+  );
   const tid = (name: string) => tenants.find((t) => t.full_name.startsWith(name))!.id as string;
 
   console.log("→ Baux (via create_lease, journalisé)");
@@ -89,21 +108,46 @@ async function main() {
     ["APT05", "Ouattara", "habitation", 120000, 0, 2, 2, 5, "2026-02-01"],
   ];
   for (const [code, tenant, usage, rent, charges, dep, adv, day, start] of leases) {
-    await must(db.rpc("create_lease", {
-      p_actor: owner, p_org: orgId, p_property: pid(code), p_tenant: tid(tenant), p_usage: usage,
-      p_rent: rent, p_charges: charges, p_deposit_months: dep, p_advance_months: adv, p_due_day: day,
-      p_start: start, p_ip: "127.0.0.1", p_ua: "seed",
-    }), `bail ${code}`);
+    await must(
+      db.rpc("create_lease", {
+        p_actor: owner,
+        p_org: orgId,
+        p_property: pid(code),
+        p_tenant: tid(tenant),
+        p_usage: usage,
+        p_rent: rent,
+        p_charges: charges,
+        p_deposit_months: dep,
+        p_advance_months: adv,
+        p_due_day: day,
+        p_start: start,
+        p_ip: "127.0.0.1",
+        p_ua: "seed",
+      }),
+      `bail ${code}`,
+    );
   }
 
   console.log("→ RIB du bailleur");
-  await must(db.rpc("add_payout_account", {
-    p_actor: owner, p_org: orgId, p_kind: "banque", p_holder: "AKWABA IMMOBILIER SARL", p_bank: "Société Générale Côte d'Ivoire",
-    p_iban: "CI15CI0080111301340012530091", p_operator: null, p_msisdn: null, p_ip: "127.0.0.1", p_ua: "seed",
-  }), "RIB");
+  await must(
+    db.rpc("add_payout_account", {
+      p_actor: owner,
+      p_org: orgId,
+      p_kind: "banque",
+      p_holder: "AKWABA IMMOBILIER SARL",
+      p_bank: "Société Générale Côte d'Ivoire",
+      p_iban: "CI15CI0080111301340012530091",
+      p_operator: null,
+      p_msisdn: null,
+      p_ip: "127.0.0.1",
+      p_ua: "seed",
+    }),
+    "RIB",
+  );
 
   console.log("→ Avis d'échéance (mois précédent + mois courant)");
-  const prev = monthStart(-1), cur = monthStart(0);
+  const prev = monthStart(-1),
+    cur = monthStart(0);
   await must(db.rpc("generate_monthly_invoices", { p_period: prev }), "avis M-1");
   await must(db.rpc("generate_monthly_invoices", { p_period: cur }), "avis M");
   const invoices = await must(db.from("invoices").select("id, period, tenant_id, amount_due"), "lecture avis");
@@ -112,13 +156,33 @@ async function main() {
   async function mobileMoney(tenant: string, actor: string, period: string, operator: "orange" | "mtn" | "wave" | "moov") {
     const i = inv(tenant, period);
     const tx = `SEED${randomUUID().replace(/-/g, "").slice(0, 20).toUpperCase()}`;
-    const intent = await must(db.rpc("create_payment_intent", {
-      p_actor: actor, p_invoice: i.id, p_provider: "cinetpay", p_operator: operator, p_tx_id: tx, p_ip: "41.66.10.20", p_ua: "seed",
-    }).single<{ amount: number }>(), "intention");
+    const intent = await must(
+      db
+        .rpc("create_payment_intent", {
+          p_actor: actor,
+          p_invoice: i.id,
+          p_provider: "cinetpay",
+          p_operator: operator,
+          p_tx_id: tx,
+          p_ip: "41.66.10.20",
+          p_ua: "seed",
+        })
+        .single<{ amount: number }>(),
+      "intention",
+    );
     // Simule le webhook signé + revérification fournisseur.
-    await must(db.rpc("confirm_provider_payment", {
-      p_provider: "cinetpay", p_tx_id: tx, p_amount: intent.amount, p_currency: "XOF", p_operator: operator, p_ip: "41.202.208.1", p_meta: { seed: true },
-    }), "confirmation");
+    await must(
+      db.rpc("confirm_provider_payment", {
+        p_provider: "cinetpay",
+        p_tx_id: tx,
+        p_amount: intent.amount,
+        p_currency: "XOF",
+        p_operator: operator,
+        p_ip: "41.202.208.1",
+        p_meta: { seed: true },
+      }),
+      "confirmation",
+    );
   }
 
   console.log("→ Paiements");
@@ -128,7 +192,10 @@ async function main() {
   await mobileMoney("Traoré", traore, prev, "mtn");
   for (const t of ["Koné", "Bamba", "Cabinet", "Ouattara"]) {
     const i = inv(t, prev);
-    await must(db.rpc("record_cash_payment", { p_actor: accountant, p_invoice: i.id, p_amount: i.amount_due, p_ip: "127.0.0.1", p_ua: "seed" }), "espèces M-1");
+    await must(
+      db.rpc("record_cash_payment", { p_actor: accountant, p_invoice: i.id, p_amount: i.amount_due, p_ip: "127.0.0.1", p_ua: "seed" }),
+      "espèces M-1",
+    );
   }
   // Yao : mois précédent impayé → retard.
 
@@ -139,16 +206,37 @@ async function main() {
   const proofPath = `${orgId}/${tInv.id}/${randomUUID()}.pdf`;
   const pdf = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
   await must(db.storage.from("transfer-proofs").upload(proofPath, pdf, { contentType: "application/pdf" }), "preuve");
-  await must(db.rpc("submit_transfer_proof", {
-    p_actor: traore, p_invoice: tInv.id, p_amount: tInv.amount_due, p_bank_reference: "SGCI-VIR-20261103-7781",
-    p_proof_path: proofPath, p_tx_id: `VIR-${randomUUID()}`, p_ip: "41.66.9.9", p_ua: "seed",
-  }), "virement");
+  await must(
+    db.rpc("submit_transfer_proof", {
+      p_actor: traore,
+      p_invoice: tInv.id,
+      p_amount: tInv.amount_due,
+      p_bank_reference: "SGCI-VIR-20261103-7781",
+      p_proof_path: proofPath,
+      p_tx_id: `VIR-${randomUUID()}`,
+      p_ip: "41.66.9.9",
+      p_ua: "seed",
+    }),
+    "virement",
+  );
 
   // Koné : acompte en espèces
-  await must(db.rpc("record_cash_payment", { p_actor: accountant, p_invoice: inv("Koné", cur).id, p_amount: 40000, p_ip: "127.0.0.1", p_ua: "seed" }), "acompte");
+  await must(
+    db.rpc("record_cash_payment", {
+      p_actor: accountant,
+      p_invoice: inv("Koné", cur).id,
+      p_amount: 40000,
+      p_ip: "127.0.0.1",
+      p_ua: "seed",
+    }),
+    "acompte",
+  );
   // Bamba : soldé en espèces au bureau
   const b = inv("Bamba", cur);
-  await must(db.rpc("record_cash_payment", { p_actor: accountant, p_invoice: b.id, p_amount: b.amount_due, p_ip: "127.0.0.1", p_ua: "seed" }), "Bamba");
+  await must(
+    db.rpc("record_cash_payment", { p_actor: accountant, p_invoice: b.id, p_amount: b.amount_due, p_ip: "127.0.0.1", p_ua: "seed" }),
+    "Bamba",
+  );
 
   await must(db.rpc("mark_overdue_invoices"), "retards");
 

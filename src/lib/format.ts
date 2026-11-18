@@ -52,5 +52,8 @@ export function groupIban(iban: string): string {
 
 /** Code de vérification lisible : 16 premiers caractères hex en 4 groupes. */
 export function formatVerificationCode(signature: string): string {
-  return signature.slice(0, 16).toUpperCase().replace(/(.{4})(?=.)/g, "$1-");
+  return signature
+    .slice(0, 16)
+    .toUpperCase()
+    .replace(/(.{4})(?=.)/g, "$1-");
 }

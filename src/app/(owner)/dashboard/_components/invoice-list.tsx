@@ -6,15 +6,27 @@ import { ShareActions } from "./share-actions";
 
 const ORDER = { en_retard: 0, partiel: 1, a_payer: 2, paye: 3, annule: 4 } as const;
 
-export function InvoiceList({ rows, period, appUrl, landlordName, canRecordCash }: {
-  rows: InvoiceRow[]; period: string; appUrl: string; landlordName: string; canRecordCash: boolean;
+export function InvoiceList({
+  rows,
+  period,
+  appUrl,
+  landlordName,
+  canRecordCash,
+}: {
+  rows: InvoiceRow[];
+  period: string;
+  appUrl: string;
+  landlordName: string;
+  canRecordCash: boolean;
 }) {
   const sorted = [...rows].sort((a, b) => ORDER[a.status] - ORDER[b.status] || a.due_date.localeCompare(b.due_date));
   return (
     <Card>
       <CardHeader>
         <CardTitle>Avis d&apos;échéance — {formatPeriod(period)}</CardTitle>
-        <CardDescription>Retards des mois précédents inclus. Partagez l&apos;avis en un clic ; le lien de paiement est personnel.</CardDescription>
+        <CardDescription>
+          Retards des mois précédents inclus. Partagez l&apos;avis en un clic ; le lien de paiement est personnel.
+        </CardDescription>
       </CardHeader>
       <CardContent className="p-0 sm:p-0">
         {sorted.length === 0 ? (

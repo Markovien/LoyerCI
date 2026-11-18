@@ -46,9 +46,12 @@ export default async function ReturnPage({ params }: { params: Promise<{ invoice
           <p className="text-sm text-muted-foreground">
             {state === "ok" && `${formatXOF(last?.amount ?? inv.amount_due)} reçus. Votre quittance est disponible.`}
             {state === "ko" && "Aucun montant n'a été débité ou l'opération a été refusée. Vous pouvez réessayer."}
-            {state === "wait" && "Validez la transaction sur votre téléphone si ce n'est pas déjà fait. Cette page se met à jour automatiquement."}
+            {state === "wait" &&
+              "Validez la transaction sur votre téléphone si ce n'est pas déjà fait. Cette page se met à jour automatiquement."}
           </p>
-          <Button asChild className="mt-2"><Link href={`/pay/${invoiceId}`}>{state === "ko" ? "Réessayer" : "Retour à mon avis"}</Link></Button>
+          <Button asChild className="mt-2">
+            <Link href={`/pay/${invoiceId}`}>{state === "ko" ? "Réessayer" : "Retour à mon avis"}</Link>
+          </Button>
         </CardContent>
       </Card>
       {state === "wait" && <AutoRefresh everyMs={4000} maxTries={45} />}

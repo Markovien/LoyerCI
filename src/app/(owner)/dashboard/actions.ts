@@ -56,7 +56,10 @@ export async function getProofUrl(paymentId: unknown): Promise<ActionResult> {
 
   const admin = supabaseAdmin();
   const { data: path, error } = await admin.rpc("log_proof_access", {
-    p_actor: g.user.id, p_payment: id.data, p_ip: g.ctx.ip, p_ua: g.ctx.userAgent,
+    p_actor: g.user.id,
+    p_payment: id.data,
+    p_ip: g.ctx.ip,
+    p_ua: g.ctx.userAgent,
   });
   if (error || typeof path !== "string") return { ok: false, message: dbErrorMessage(error) };
 
@@ -72,8 +75,11 @@ export async function recordCashPayment(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Saisie invalide" };
 
   const { error } = await supabaseAdmin().rpc("record_cash_payment", {
-    p_actor: g.user.id, p_invoice: parsed.data.invoiceId, p_amount: parsed.data.amount,
-    p_ip: g.ctx.ip, p_ua: g.ctx.userAgent,
+    p_actor: g.user.id,
+    p_invoice: parsed.data.invoiceId,
+    p_amount: parsed.data.amount,
+    p_ip: g.ctx.ip,
+    p_ua: g.ctx.userAgent,
   });
   if (error) return { ok: false, message: dbErrorMessage(error) };
   revalidatePath("/dashboard");

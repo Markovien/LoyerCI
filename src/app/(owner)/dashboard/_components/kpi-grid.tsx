@@ -9,10 +9,36 @@ export function KpiGrid({ k }: { k: DashboardKpis }) {
   const occupancy = k.properties_total > 0 ? Math.round((k.properties_occupied / k.properties_total) * 100) : 0;
 
   const items = [
-    { label: "Encaissé ce mois", value: formatXOF(k.collected), sub: `${recovery} % de ${formatXOF(k.expected)} attendus`, icon: Wallet, tone: "text-success", bar: recovery },
-    { label: "En attente", value: formatXOF(k.pending), sub: "Avis du mois non soldés", icon: Hourglass, tone: "text-[oklch(0.55_0.12_70)]" },
-    { label: "Taux d'occupation", value: `${occupancy} %`, sub: `${k.properties_occupied} biens loués sur ${k.properties_total}`, icon: Building2, tone: "text-info", bar: occupancy },
-    { label: "Retards de paiement", value: String(k.overdue_count), sub: `${formatXOF(k.overdue_amount)} d'impayés`, icon: AlarmClock, tone: k.overdue_count ? "text-danger" : "text-muted-foreground" },
+    {
+      label: "Encaissé ce mois",
+      value: formatXOF(k.collected),
+      sub: `${recovery} % de ${formatXOF(k.expected)} attendus`,
+      icon: Wallet,
+      tone: "text-success",
+      bar: recovery,
+    },
+    {
+      label: "En attente",
+      value: formatXOF(k.pending),
+      sub: "Avis du mois non soldés",
+      icon: Hourglass,
+      tone: "text-[oklch(0.55_0.12_70)]",
+    },
+    {
+      label: "Taux d'occupation",
+      value: `${occupancy} %`,
+      sub: `${k.properties_occupied} biens loués sur ${k.properties_total}`,
+      icon: Building2,
+      tone: "text-info",
+      bar: occupancy,
+    },
+    {
+      label: "Retards de paiement",
+      value: String(k.overdue_count),
+      sub: `${formatXOF(k.overdue_amount)} d'impayés`,
+      icon: AlarmClock,
+      tone: k.overdue_count ? "text-danger" : "text-muted-foreground",
+    },
   ];
 
   return (
@@ -25,7 +51,14 @@ export function KpiGrid({ k }: { k: DashboardKpis }) {
           </div>
           <p className="text-lg font-semibold tracking-tight sm:text-2xl">{value}</p>
           {bar !== undefined && (
-            <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={bar} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
+            <div
+              className="h-1.5 overflow-hidden rounded-full bg-muted"
+              role="progressbar"
+              aria-valuenow={bar}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={label}
+            >
               <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${bar}%` }} />
             </div>
           )}

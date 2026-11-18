@@ -60,7 +60,14 @@ export interface TenantInvoiceRow {
   organizations: { name: string } | null;
   tenants: { full_name: string; phone: string } | null;
   leases: { properties: { label: string; commune: string; quartier: string | null; city: string } | null } | null;
-  payments: { id: string; method: PaymentMethod; status: PaymentStatus; amount: number; created_at: string; failure_reason: string | null }[];
+  payments: {
+    id: string;
+    method: PaymentMethod;
+    status: PaymentStatus;
+    amount: number;
+    created_at: string;
+    failure_reason: string | null;
+  }[];
 }
 
 export interface ReceiptRow {

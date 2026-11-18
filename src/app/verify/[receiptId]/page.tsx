@@ -43,9 +43,7 @@ async function resolve(receiptId: string, code: string | undefined): Promise<Vie
 
   // verify_receipt n'est exécutable que par service_role (pas d'appel PostgREST direct
   // qui contournerait ce limiteur) ; elle ne renvoie que des données masquées.
-  const { data, error } = await supabaseAdmin()
-    .rpc("verify_receipt", { p_id: parsed.data.receiptId, p_code: parsed.data.code })
-    .single();
+  const { data, error } = await supabaseAdmin().rpc("verify_receipt", { p_id: parsed.data.receiptId, p_code: parsed.data.code }).single();
   if (error || !data) return { kind: "result", r: { verdict: "invalide" } as VerifyReceiptResult };
   // Le verdict est un « text » SQL : toute valeur inattendue est traitée comme invalide.
   const verdict = verdictSchema.safeParse(data.verdict);
@@ -53,7 +51,10 @@ async function resolve(receiptId: string, code: string | undefined): Promise<Vie
   return { kind: "result", r: { ...data, verdict: verdict.data } };
 }
 
-export default async function VerifyPage({ params, searchParams }: {
+export default async function VerifyPage({
+  params,
+  searchParams,
+}: {
   params: Promise<{ receiptId: string }>;
   searchParams: Promise<{ c?: string }>;
 }) {
@@ -66,7 +67,8 @@ export default async function VerifyPage({ params, searchParams }: {
     <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 px-4 py-6">
       <Brand />
       <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs">
-        Vérifiez que l&apos;adresse affichée par votre navigateur est exactement <strong className="font-mono">https://{host}</strong>. Une autre adresse = page frauduleuse.
+        Vérifiez que l&apos;adresse affichée par votre navigateur est exactement <strong className="font-mono">https://{host}</strong>. Une
+        autre adresse = page frauduleuse.
       </div>
 
       {view.kind === "form" && (
@@ -75,7 +77,16 @@ export default async function VerifyPage({ params, searchParams }: {
             <h1 className="text-lg font-semibold">Vérifier une quittance</h1>
             <form method="get" className="grid gap-3">
               <Label htmlFor="c">Code de vérification imprimé sur la quittance</Label>
-              <Input id="c" name="c" required autoComplete="off" autoCapitalize="characters" placeholder="XXXX-XXXX-XXXX-XXXX" maxLength={24} className="font-mono uppercase tracking-wider" />
+              <Input
+                id="c"
+                name="c"
+                required
+                autoComplete="off"
+                autoCapitalize="characters"
+                placeholder="XXXX-XXXX-XXXX-XXXX"
+                maxLength={24}
+                className="font-mono uppercase tracking-wider"
+              />
               {view.error && <p className="text-sm text-danger">{view.error}</p>}
               <Button type="submit">Vérifier</Button>
             </form>
@@ -84,7 +95,9 @@ export default async function VerifyPage({ params, searchParams }: {
       )}
 
       {view.kind === "throttled" && (
-        <Card><CardContent className="p-5 text-sm">Trop de vérifications depuis votre connexion. Réessayez dans une minute.</CardContent></Card>
+        <Card>
+          <CardContent className="p-5 text-sm">Trop de vérifications depuis votre connexion. Réessayez dans une minute.</CardContent>
+        </Card>
       )}
 
       {view.kind === "result" && <Verdict r={view.r} />}

@@ -44,7 +44,10 @@ export interface PaymentProvider {
 }
 
 export class ProviderError extends Error {
-  constructor(message: string, readonly retriable = false) {
+  constructor(
+    message: string,
+    readonly retriable = false,
+  ) {
     super(message);
     this.name = "ProviderError";
   }

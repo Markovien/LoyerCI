@@ -1,13 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": [
-    "typescript",
-    "react",
-    "nextjs",
-    "import",
-    "unicorn",
-    "oxc"
-  ],
+  "plugins": ["typescript", "react", "nextjs", "import", "unicorn", "oxc"],
   "categories": {
     "correctness": "error",
     "suspicious": "warn"
@@ -17,12 +10,7 @@
     "node": true,
     "es2024": true
   },
-  "ignorePatterns": [
-    "src/types/supabase.ts",
-    ".next/**",
-    "node_modules/**",
-    "public/sw.js"
-  ],
+  "ignorePatterns": ["src/types/supabase.ts", ".next/**", "node_modules/**", "public/sw.js"],
   "rules": {
     "typescript/no-floating-promises": "error",
     "typescript/no-misused-promises": "error",

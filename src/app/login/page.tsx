@@ -15,7 +15,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <CardTitle>Connexion</CardTitle>
           <CardDescription>Propriétaires, gestionnaires et locataires : un lien sécurisé vous est envoyé par e-mail.</CardDescription>
         </CardHeader>
-        <CardContent><LoginForm next={next} /></CardContent>
+        <CardContent>
+          <LoginForm next={next} />
+        </CardContent>
       </Card>
     </main>
   );

@@ -18,7 +18,10 @@ export function clientIpFrom(h: Headers, headerName: string, trustedHops: number
   if (!raw) return null;
   let candidate = raw.trim();
   if (headerName === "x-forwarded-for") {
-    const chain = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    const chain = raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     candidate = chain[Math.max(chain.length - trustedHops, 0)] ?? "";
   }
   candidate = candidate.replace(/^\[|\]$/g, "").replace(/^::ffff:/, "");

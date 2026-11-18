@@ -17,7 +17,9 @@ export function PendingTransfers({ rows }: { rows: PendingTransferRow[] }) {
         <CardDescription>Contrôlez le reçu ET le relevé bancaire : la référence doit figurer sur l&apos;opération.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
-        {rows.map((r) => <TransferRow key={r.id} row={r} />)}
+        {rows.map((r) => (
+          <TransferRow key={r.id} row={r} />
+        ))}
       </CardContent>
     </Card>
   );
@@ -57,17 +59,39 @@ function TransferRow({ row }: { row: PendingTransferRow }) {
         <p className="text-base font-semibold">{formatXOF(row.amount)}</p>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" onClick={openProof} disabled={pending}><FileSearch />Voir la preuve</Button>
-        <Button size="sm" onClick={() => act("valider")} disabled={pending}><Check />Valider</Button>
-        <Button size="sm" variant="ghost" onClick={() => setRejecting((v) => !v)} disabled={pending}><X />Rejeter</Button>
+        <Button size="sm" variant="outline" onClick={openProof} disabled={pending}>
+          <FileSearch />
+          Voir la preuve
+        </Button>
+        <Button size="sm" onClick={() => act("valider")} disabled={pending}>
+          <Check />
+          Valider
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setRejecting((v) => !v)} disabled={pending}>
+          <X />
+          Rejeter
+        </Button>
       </div>
       {rejecting && (
         <div className="mt-2 flex flex-wrap gap-2">
-          <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="Motif (ex. montant absent du relevé)" className="h-9 flex-1" aria-label="Motif du rejet" />
-          <Button size="sm" variant="danger" onClick={() => act("rejeter")} disabled={pending || reason.trim().length < 5}>Confirmer le rejet</Button>
+          <Input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={300}
+            placeholder="Motif (ex. montant absent du relevé)"
+            className="h-9 flex-1"
+            aria-label="Motif du rejet"
+          />
+          <Button size="sm" variant="danger" onClick={() => act("rejeter")} disabled={pending || reason.trim().length < 5}>
+            Confirmer le rejet
+          </Button>
         </div>
       )}
-      {message && <p role="status" className={message.ok ? "mt-2 text-xs text-success" : "mt-2 text-xs text-danger"}>{message.text}</p>}
+      {message && (
+        <p role="status" className={message.ok ? "mt-2 text-xs text-success" : "mt-2 text-xs text-danger"}>
+          {message.text}
+        </p>
+      )}
     </div>
   );
 }

@@ -29,22 +29,32 @@ export function PaymentPanel({ invoiceId, remaining, transfer }: { invoiceId: st
   return (
     <div className="grid gap-4">
       <div role="tablist" aria-label="Mode de paiement" className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
-        {([
-          { id: "mobile", label: "Mobile Money", icon: Smartphone },
-          { id: "virement", label: "Virement bancaire", icon: Building },
-        ] as const).map(({ id, label, icon: Icon }) => (
+        {(
+          [
+            { id: "mobile", label: "Mobile Money", icon: Smartphone },
+            { id: "virement", label: "Virement bancaire", icon: Building },
+          ] as const
+        ).map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             role="tab"
             aria-selected={tab === id}
             onClick={() => setTab(id)}
-            className={cn("flex h-10 items-center justify-center gap-2 rounded-md text-sm font-medium transition", tab === id ? "bg-card shadow-sm" : "text-muted-foreground")}
+            className={cn(
+              "flex h-10 items-center justify-center gap-2 rounded-md text-sm font-medium transition",
+              tab === id ? "bg-card shadow-sm" : "text-muted-foreground",
+            )}
           >
-            <Icon className="size-4" aria-hidden />{label}
+            <Icon className="size-4" aria-hidden />
+            {label}
           </button>
         ))}
       </div>
-      {tab === "mobile" ? <MobileMoney invoiceId={invoiceId} remaining={remaining} /> : <BankTransfer invoiceId={invoiceId} remaining={remaining} transfer={transfer} />}
+      {tab === "mobile" ? (
+        <MobileMoney invoiceId={invoiceId} remaining={remaining} />
+      ) : (
+        <BankTransfer invoiceId={invoiceId} remaining={remaining} transfer={transfer} />
+      )}
     </div>
   );
 }
@@ -76,8 +86,17 @@ function MobileMoney({ invoiceId, remaining }: { invoiceId: string; remaining: n
               operator === o.id && "border-primary ring-1 ring-primary",
             )}
           >
-            <input type="radio" name="operator" value={o.id} className="sr-only" checked={operator === o.id} onChange={() => setOperator(o.id)} />
-            <span aria-hidden className={cn("grid size-9 shrink-0 place-items-center rounded-md text-xs font-bold", o.swatch)}>{o.name.slice(0, 2).toUpperCase()}</span>
+            <input
+              type="radio"
+              name="operator"
+              value={o.id}
+              className="sr-only"
+              checked={operator === o.id}
+              onChange={() => setOperator(o.id)}
+            />
+            <span aria-hidden className={cn("grid size-9 shrink-0 place-items-center rounded-md text-xs font-bold", o.swatch)}>
+              {o.name.slice(0, 2).toUpperCase()}
+            </span>
             <span className="min-w-0">
               <span className="block truncate text-sm font-medium">{o.name}</span>
               <span className="block text-xs text-muted-foreground">{o.hint}</span>
@@ -86,12 +105,17 @@ function MobileMoney({ invoiceId, remaining }: { invoiceId: string; remaining: n
         ))}
       </fieldset>
       <Button size="lg" variant="accent" onClick={pay} disabled={!operator || pending} className="w-full">
-        <Lock />{pending ? "Connexion sécurisée…" : `Payer ${formatXOF(remaining)}`}
+        <Lock />
+        {pending ? "Connexion sécurisée…" : `Payer ${formatXOF(remaining)}`}
       </Button>
       <p className="text-center text-xs text-muted-foreground">
         Vous confirmerez avec votre code secret sur la page sécurisée de l&apos;opérateur. LoyerCI ne voit jamais votre code.
       </p>
-      {error && <p role="alert" className="rounded-md bg-danger/10 p-3 text-sm text-danger">{error}</p>}
+      {error && (
+        <p role="alert" className="rounded-md bg-danger/10 p-3 text-sm text-danger">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -100,10 +124,13 @@ function CopyField({ label, value, display, emphasize }: { label: string; value:
   const [copied, setCopied] = useState<"ok" | "ko" | null>(null);
   const copy = () => {
     // Le presse-papier peut être refusé (contexte non sécurisé, permission) : on le signale.
-    navigator.clipboard.writeText(value).then(
-      () => setCopied("ok"),
-      () => setCopied("ko"),
-    ).finally(() => setTimeout(() => setCopied(null), 1500));
+    navigator.clipboard
+      .writeText(value)
+      .then(
+        () => setCopied("ok"),
+        () => setCopied("ko"),
+      )
+      .finally(() => setTimeout(() => setCopied(null), 1500));
   };
   return (
     <div className={cn("flex items-center justify-between gap-3 rounded-lg border p-3", emphasize && "border-accent bg-accent/8")}>
@@ -111,10 +138,7 @@ function CopyField({ label, value, display, emphasize }: { label: string; value:
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className={cn("break-words font-mono text-[13px] sm:text-sm", emphasize && "text-base font-semibold")}>{display ?? value}</p>
       </div>
-      <Button
-        type="button" size="icon" variant="ghost" aria-label={`Copier ${label}`}
-        onClick={copy}
-      >
+      <Button type="button" size="icon" variant="ghost" aria-label={`Copier ${label}`} onClick={copy}>
         {copied === "ok" ? <Check className="text-success" /> : copied === "ko" ? <X className="text-danger" /> : <Copy />}
       </Button>
     </div>
@@ -125,7 +149,11 @@ function BankTransfer({ invoiceId, remaining, transfer }: { invoiceId: string; r
   const [state, action, pending] = useActionState<ProofState, FormData>(submitTransferProof, null);
 
   if (!transfer) {
-    return <p role="tabpanel" className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">Votre bailleur n&apos;a pas encore configuré de compte bancaire. Utilisez le Mobile Money.</p>;
+    return (
+      <p role="tabpanel" className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
+        Votre bailleur n&apos;a pas encore configuré de compte bancaire. Utilisez le Mobile Money.
+      </p>
+    );
   }
 
   return (
@@ -155,8 +183,15 @@ function BankTransfer({ invoiceId, remaining, transfer }: { invoiceId: string; r
           <Label htmlFor="proof">Reçu ou capture (PDF, JPG, PNG · 5 Mo max.)</Label>
           <Input id="proof" name="proof" type="file" accept="application/pdf,image/jpeg,image/png" required />
         </div>
-        <Button type="submit" disabled={pending}><Upload />{pending ? "Envoi sécurisé…" : "Envoyer la preuve"}</Button>
-        {state && <p role="status" className={cn("rounded-md p-3 text-sm", state.ok ? "bg-success/10 text-success" : "bg-danger/10 text-danger")}>{state.message}</p>}
+        <Button type="submit" disabled={pending}>
+          <Upload />
+          {pending ? "Envoi sécurisé…" : "Envoyer la preuve"}
+        </Button>
+        {state && (
+          <p role="status" className={cn("rounded-md p-3 text-sm", state.ok ? "bg-success/10 text-success" : "bg-danger/10 text-danger")}>
+            {state.message}
+          </p>
+        )}
       </form>
     </div>
   );

@@ -57,9 +57,18 @@ export async function renderReceiptPdf(r: ReceiptRow, appUrl: string): Promise<U
   row("Locataire", r.tenant_name);
   row("Bien loué", r.property_label);
   row("Adresse", r.property_location);
-  row("Période", formatPeriod(r.period).replace(/^./, (c) => c.toUpperCase()));
+  row(
+    "Période",
+    formatPeriod(r.period).replace(/^./, (c) => c.toUpperCase()),
+  );
   row("Date de paiement", formatLongDate(r.paid_at));
-  row("Mode de règlement", r.payment_methods.split("+").map((m) => METHOD_LABELS[m] ?? m).join(" + "));
+  row(
+    "Mode de règlement",
+    r.payment_methods
+      .split("+")
+      .map((m) => METHOD_LABELS[m] ?? m)
+      .join(" + "),
+  );
 
   y -= 6;
   page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 1, color: LINE });
@@ -69,7 +78,14 @@ export async function renderReceiptPdf(r: ReceiptRow, appUrl: string): Promise<U
   const amountRow = (label: string, value: number, strong = false) => {
     const v = formatXOFPlain(value);
     text(page, label, M, y, strong ? bold : font, strong ? 12 : 11);
-    text(page, v, width - M - (strong ? bold : font).widthOfTextAtSize(clean(v), strong ? 13 : 11), y, strong ? bold : font, strong ? 13 : 11);
+    text(
+      page,
+      v,
+      width - M - (strong ? bold : font).widthOfTextAtSize(clean(v), strong ? 13 : 11),
+      y,
+      strong ? bold : font,
+      strong ? 13 : 11,
+    );
     y -= 22;
   };
   amountRow("Loyer principal", r.rent_amount);
@@ -100,18 +116,45 @@ export async function renderReceiptPdf(r: ReceiptRow, appUrl: string): Promise<U
 
   const tx = M + 170;
   let ty = boxY + 128;
-  text(page, "Vérifier l'authenticité", tx, ty, bold, 13, GREEN); ty -= 20;
-  for (const line of wrap("Scannez le QR code ou saisissez le code ci-dessous sur la page de vérification officielle :", font, 9.5, width - tx - M)) {
-    text(page, line, tx, ty, font, 9.5, MUTED); ty -= 13;
+  text(page, "Vérifier l'authenticité", tx, ty, bold, 13, GREEN);
+  ty -= 20;
+  for (const line of wrap(
+    "Scannez le QR code ou saisissez le code ci-dessous sur la page de vérification officielle :",
+    font,
+    9.5,
+    width - tx - M,
+  )) {
+    text(page, line, tx, ty, font, 9.5, MUTED);
+    ty -= 13;
   }
-  text(page, new URL(appUrl).host + "/verify", tx, ty, bold, 10); ty -= 22;
-  text(page, "Code de vérification", tx, ty, font, 9, MUTED); ty -= 15;
-  text(page, formatVerificationCode(r.signature), tx, ty, bold, 13); ty -= 20;
-  text(page, `Empreinte SHA-256 : ${r.content_hash.slice(0, 16).toUpperCase()}`, tx, ty, font, 8.5, MUTED); ty -= 12;
+  text(page, new URL(appUrl).host + "/verify", tx, ty, bold, 10);
+  ty -= 22;
+  text(page, "Code de vérification", tx, ty, font, 9, MUTED);
+  ty -= 15;
+  text(page, formatVerificationCode(r.signature), tx, ty, bold, 13);
+  ty -= 20;
+  text(page, `Empreinte SHA-256 : ${r.content_hash.slice(0, 16).toUpperCase()}`, tx, ty, font, 8.5, MUTED);
+  ty -= 12;
   text(page, `Identifiant : ${r.id}`, tx, ty, font, 8.5, MUTED);
 
-  text(page, "Méfiez-vous des copies : seule la page officielle fait foi. N'acceptez pas une page de vérification sur un autre domaine.", M, 58, font, 8, MUTED);
-  text(page, `Émise le ${formatLongDate(r.issued_at)} · Document généré électroniquement, valable sans signature manuscrite.`, M, 44, font, 8, MUTED);
+  text(
+    page,
+    "Méfiez-vous des copies : seule la page officielle fait foi. N'acceptez pas une page de vérification sur un autre domaine.",
+    M,
+    58,
+    font,
+    8,
+    MUTED,
+  );
+  text(
+    page,
+    `Émise le ${formatLongDate(r.issued_at)} · Document généré électroniquement, valable sans signature manuscrite.`,
+    M,
+    44,
+    font,
+    8,
+    MUTED,
+  );
 
   return pdf.save();
 }

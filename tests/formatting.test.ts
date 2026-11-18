@@ -48,9 +48,16 @@ describe("validation des entrées (Zod)", () => {
 
 describe("avis WhatsApp", () => {
   const notice = {
-    tenantName: "Kouassi Jean-Marc", landlordName: "Akwaba Immobilier", propertyLabel: "Villa Duplex 5 pièces",
-    period: "2026-05-01", amountDue: 450000, amountPaid: 0, dueDate: "2026-05-05",
-    reference: "LOYER-2026-05-VCR01-96", payUrl: "https://loyerci.ci/pay/123", overdue: false,
+    tenantName: "Kouassi Jean-Marc",
+    landlordName: "Akwaba Immobilier",
+    propertyLabel: "Villa Duplex 5 pièces",
+    period: "2026-05-01",
+    amountDue: 450000,
+    amountPaid: 0,
+    dueDate: "2026-05-05",
+    reference: "LOYER-2026-05-VCR01-96",
+    payUrl: "https://loyerci.ci/pay/123",
+    overdue: false,
   };
   it("génère un lien wa.me encodé, sans coordonnées bancaires", () => {
     const text = buildDueNoticeText(notice);

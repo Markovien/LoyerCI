@@ -18,7 +18,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ rec
 
   const { data: receipt } = await supabase
     .from("receipts")
-    .select("id, receipt_number, landlord_name, tenant_name, property_label, property_location, period, rent_amount, charges_amount, amount, payment_methods, paid_at, content_hash, signature, status, issued_at")
+    .select(
+      "id, receipt_number, landlord_name, tenant_name, property_label, property_location, period, rent_amount, charges_amount, amount, payment_methods, paid_at, content_hash, signature, status, issued_at",
+    )
     .eq("id", receiptId)
     .maybeSingle();
   if (!receipt) return new NextResponse("Introuvable", { status: 404 });

@@ -2,15 +2,33 @@
  * Montant en toutes lettres (français, règles de 1990 simplifiées), pour la quittance.
  * Ex. 450000 -> « quatre cent cinquante mille »
  */
-const UNITS = ["zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix",
-  "onze", "douze", "treize", "quatorze", "quinze", "seize"];
+const UNITS = [
+  "zéro",
+  "un",
+  "deux",
+  "trois",
+  "quatre",
+  "cinq",
+  "six",
+  "sept",
+  "huit",
+  "neuf",
+  "dix",
+  "onze",
+  "douze",
+  "treize",
+  "quatorze",
+  "quinze",
+  "seize",
+];
 const TENS = ["", "dix", "vingt", "trente", "quarante", "cinquante", "soixante"];
 
 function below100(n: number): string {
   if (n <= 16) return UNITS[n]!;
   if (n < 20) return `dix-${UNITS[n - 10]}`;
   if (n < 70) {
-    const t = Math.floor(n / 10), u = n % 10;
+    const t = Math.floor(n / 10),
+      u = n % 10;
     if (u === 0) return TENS[t]!;
     if (u === 1) return `${TENS[t]} et un`;
     return `${TENS[t]}-${UNITS[u]}`;
@@ -21,7 +39,8 @@ function below100(n: number): string {
 }
 
 function below1000(n: number): string {
-  const h = Math.floor(n / 100), r = n % 100;
+  const h = Math.floor(n / 100),
+    r = n % 100;
   if (h === 0) return below100(r);
   const head = h === 1 ? "cent" : `${UNITS[h]} cent${r === 0 ? "s" : ""}`;
   return r === 0 ? head : `${head} ${below100(r)}`;

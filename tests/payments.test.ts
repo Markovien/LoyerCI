@@ -8,11 +8,23 @@ const provider = createCinetPay({ apiKey: "apikey-test-123", siteId: "105889", s
 
 function notification(overrides: Record<string, string> = {}) {
   const form = new URLSearchParams({
-    cpm_site_id: "105889", cpm_trans_id: "LCIM9XK2A1B2C3D4E5F6", cpm_trans_date: "2026-05-03 10:12:44",
-    cpm_amount: "450000", cpm_currency: "XOF", signature: "abc", payment_method: "WAVECI",
-    cel_phone_num: "0707123456", cpm_phone_prefixe: "225", cpm_language: "fr", cpm_version: "V4",
-    cpm_payment_config: "Single", cpm_page_action: "Payment", cpm_custom: "", cpm_designation: "Loyer",
-    cpm_error_message: "", ...overrides,
+    cpm_site_id: "105889",
+    cpm_trans_id: "LCIM9XK2A1B2C3D4E5F6",
+    cpm_trans_date: "2026-05-03 10:12:44",
+    cpm_amount: "450000",
+    cpm_currency: "XOF",
+    signature: "abc",
+    payment_method: "WAVECI",
+    cel_phone_num: "0707123456",
+    cpm_phone_prefixe: "225",
+    cpm_language: "fr",
+    cpm_version: "V4",
+    cpm_payment_config: "Single",
+    cpm_page_action: "Payment",
+    cpm_custom: "",
+    cpm_designation: "Loyer",
+    cpm_error_message: "",
+    ...overrides,
   });
   return form;
 }

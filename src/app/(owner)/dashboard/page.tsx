@@ -14,8 +14,14 @@ import { RealtimeRefresh } from "./_components/realtime-refresh";
 export const metadata: Metadata = { title: "Tableau de bord" };
 
 const EMPTY_KPIS: DashboardKpis = {
-  collected: 0, expected: 0, pending: 0, overdue_count: 0, overdue_amount: 0,
-  properties_total: 0, properties_occupied: 0, transfers_pending: 0,
+  collected: 0,
+  expected: 0,
+  pending: 0,
+  overdue_count: 0,
+  overdue_amount: 0,
+  properties_total: 0,
+  properties_occupied: 0,
+  transfers_pending: 0,
 };
 
 function shiftMonth(period: string, delta: number) {
@@ -37,14 +43,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     supabase.rpc("dashboard_kpis", { p_org: orgId, p_month: period }).single(),
     supabase
       .from("invoices")
-      .select("id, period, amount_due, amount_paid, due_date, status, payment_reference, tenants(full_name, phone, email), leases(properties(code, label, commune, quartier, type))")
+      .select(
+        "id, period, amount_due, amount_paid, due_date, status, payment_reference, tenants(full_name, phone, email), leases(properties(code, label, commune, quartier, type))",
+      )
       .eq("org_id", orgId)
       .or(`period.eq.${period},status.eq.en_retard`)
       .order("due_date"),
     canValidate
       ? supabase
           .from("payments")
-          .select("id, amount, bank_reference, created_at, invoices(payment_reference, period, amount_due, amount_paid, tenants(full_name))")
+          .select(
+            "id, amount, bank_reference, created_at, invoices(payment_reference, period, amount_due, amount_paid, tenants(full_name))",
+          )
           .eq("org_id", orgId)
           .eq("status", "en_attente_validation")
           .order("created_at")
@@ -60,19 +70,31 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <Brand href="/dashboard" />
         <div className="flex items-center gap-3 text-sm">
           <RealtimeRefresh orgId={orgId} />
-          <span className="hidden text-muted-foreground sm:inline">{orgName} · {roleLabel}</span>
+          <span className="hidden text-muted-foreground sm:inline">
+            {orgName} · {roleLabel}
+          </span>
         </div>
       </header>
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Tableau de bord</h1>
-          <p className="text-sm text-muted-foreground">Situation de {formatPeriod(period)} · {orgName}</p>
+          <p className="text-sm text-muted-foreground">
+            Situation de {formatPeriod(period)} · {orgName}
+          </p>
         </div>
         <nav aria-label="Changer de mois" className="flex items-center gap-1">
-          <Button asChild variant="outline" size="icon"><Link href={`/dashboard?mois=${shiftMonth(period, -1)}`} aria-label="Mois précédent"><ChevronLeft /></Link></Button>
+          <Button asChild variant="outline" size="icon">
+            <Link href={`/dashboard?mois=${shiftMonth(period, -1)}`} aria-label="Mois précédent">
+              <ChevronLeft />
+            </Link>
+          </Button>
           <span className="min-w-28 text-center text-sm font-medium capitalize">{formatPeriod(period)}</span>
-          <Button asChild variant="outline" size="icon"><Link href={`/dashboard?mois=${shiftMonth(period, 1)}`} aria-label="Mois suivant"><ChevronRight /></Link></Button>
+          <Button asChild variant="outline" size="icon">
+            <Link href={`/dashboard?mois=${shiftMonth(period, 1)}`} aria-label="Mois suivant">
+              <ChevronRight />
+            </Link>
+          </Button>
         </nav>
       </div>
 
@@ -80,13 +102,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
       {canValidate && <PendingTransfers rows={transfers.data ?? []} />}
 
-      <InvoiceList
-        rows={invoices.data ?? []}
-        period={period}
-        appUrl={appUrl}
-        landlordName={orgName}
-        canRecordCash={canValidate}
-      />
+      <InvoiceList rows={invoices.data ?? []} period={period} appUrl={appUrl} landlordName={orgName} canRecordCash={canValidate} />
 
       <footer className="flex items-center gap-2 pb-6 text-xs text-muted-foreground">
         <ShieldCheck className="size-4 text-primary" aria-hidden />

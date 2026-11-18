@@ -44,8 +44,13 @@ export async function initiateMobileMoneyPayment(input: unknown): Promise<PayRes
 
   const { data: intent, error } = await admin
     .rpc("create_payment_intent", {
-      p_actor: user.id, p_invoice: invoiceId, p_provider: provider.name, p_operator: operator,
-      p_tx_id: newTransactionId(), p_ip: ctx.ip, p_ua: ctx.userAgent,
+      p_actor: user.id,
+      p_invoice: invoiceId,
+      p_provider: provider.name,
+      p_operator: operator,
+      p_tx_id: newTransactionId(),
+      p_ip: ctx.ip,
+      p_ua: ctx.userAgent,
     })
     .single();
   if (error || !intent) return { ok: false, message: dbErrorMessage(error) };
@@ -75,8 +80,10 @@ export async function initiateMobileMoneyPayment(input: unknown): Promise<PayRes
     return { ok: true, message: `Redirection vers ${OPERATOR_LABEL[operator]}…`, redirectUrl: checkoutUrl };
   } catch (e) {
     await admin.rpc("fail_provider_payment", {
-      p_provider: provider.name, p_tx_id: intent.transaction_id,
-      p_reason: e instanceof Error ? e.message.slice(0, 200) : "init_echec", p_ip: ctx.ip,
+      p_provider: provider.name,
+      p_tx_id: intent.transaction_id,
+      p_reason: e instanceof Error ? e.message.slice(0, 200) : "init_echec",
+      p_ip: ctx.ip,
     });
     console.warn(`[paiement] initialisation échouée · tx=${intent.transaction_id} · ${e instanceof Error ? e.message : "inconnu"}`);
     return { ok: false, message: "Service de paiement momentanément indisponible. Réessayez ou payez par virement." };
@@ -105,13 +112,10 @@ export async function submitTransferProof(_: ProofState, formData: FormData): Pr
   const bytes = new Uint8Array(await file.arrayBuffer());
   const kind = sniffProof(bytes);
   if (!kind) return { ok: false, message: "Format non reconnu. Envoyez un PDF, JPG ou PNG." };
-  if (kind.ext === "pdf" && pdfLooksActive(bytes)) return { ok: false, message: "PDF refusé (contenu actif). Exportez un PDF simple ou une photo." };
+  if (kind.ext === "pdf" && pdfLooksActive(bytes))
+    return { ok: false, message: "PDF refusé (contenu actif). Exportez un PDF simple ou une photo." };
 
-  const { data: invoice } = await supabase
-    .from("invoices")
-    .select("id, org_id")
-    .eq("id", parsed.data.invoiceId)
-    .maybeSingle();
+  const { data: invoice } = await supabase.from("invoices").select("id, org_id").eq("id", parsed.data.invoiceId).maybeSingle();
   if (!invoice) return { ok: false, message: "Avis introuvable." };
 
   // Nom de fichier généré côté serveur : jamais le nom fourni par l'utilisateur.
@@ -122,9 +126,14 @@ export async function submitTransferProof(_: ProofState, formData: FormData): Pr
 
   const ctx = await requestContext();
   const { error } = await admin.rpc("submit_transfer_proof", {
-    p_actor: user.id, p_invoice: invoice.id, p_amount: parsed.data.amount,
-    p_bank_reference: parsed.data.bankReference ?? null, p_proof_path: path,
-    p_tx_id: `VIR-${randomUUID()}`, p_ip: ctx.ip, p_ua: ctx.userAgent,
+    p_actor: user.id,
+    p_invoice: invoice.id,
+    p_amount: parsed.data.amount,
+    p_bank_reference: parsed.data.bankReference ?? null,
+    p_proof_path: path,
+    p_tx_id: `VIR-${randomUUID()}`,
+    p_ip: ctx.ip,
+    p_ua: ctx.userAgent,
   });
   if (error) {
     await admin.storage.from("transfer-proofs").remove([path]); // pas de fichier orphelin
