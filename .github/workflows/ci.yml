@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+
+# Moindre privilège : lecture seule du dépôt, aucun secret requis.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  qualite:
+    name: Lint, types, tests unitaires, build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      # Actions épinglées sur un SHA de commit (une étiquette peut être déplacée).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Audit des dépendances (avertissement)
+        run: npm audit --omit=dev || echo "::warning::npm audit signale des vulnérabilités"
+
+  base:
+    name: Scénarios de sécurité SQL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      # PostgreSQL 16 est préinstallé sur l'image ; test-db.sh crée une instance éphémère (utilisateur non-root).
+      - run: PG_BIN=/usr/lib/postgresql/16/bin ./scripts/test-db.sh
+
+  e2e:
+    name: Bout en bout (Supabase local + Playwright)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: [qualite, base]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22, cache: npm }
+      - uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3.2.0
+        with: { version: 2.122.1 }
+      - run: npm ci --ignore-scripts
+      - run: supabase start -x studio,imgproxy,vector,logflare,supavisor,edge-runtime
+      - name: Types générés à jour
+        run: npm run gen:types && git diff --exit-code src/types/supabase.ts
+      - name: Variables locales (clés de démonstration Supabase, sans secret réel)
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "NEXT_PUBLIC_APP_URL=http://localhost:3000"
+            echo "CLIENT_IP_HEADER=x-forwarded-for"
+            echo "TRUSTED_PROXY_HOPS=1"
+          } >> "$GITHUB_ENV"
+      - run: npm run seed
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-captures
+          path: |
+            test-results/captures
+            playwright-report
+          retention-days: 14
