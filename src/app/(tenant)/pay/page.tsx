@@ -6,7 +6,6 @@ import { InvoiceStatusBadge } from "@/components/status-badge";
 import { Card } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
 import { formatDate, formatPeriod, formatXOF } from "@/lib/format";
-import type { InvoiceStatus } from "@/types/database";
 
 export const metadata: Metadata = { title: "Mes avis d'échéance", robots: { index: false } };
 

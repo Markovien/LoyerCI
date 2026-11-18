@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
 import { formatDate, formatPeriod, formatXOF } from "@/lib/format";
 import { uuid } from "@/lib/validation/schemas";
-import type { TenantInvoiceRow } from "@/types/database";
 import { PaymentPanel, type TransferInfo } from "./payment-panel";
 
 export const metadata: Metadata = { title: "Payer mon loyer", robots: { index: false } };

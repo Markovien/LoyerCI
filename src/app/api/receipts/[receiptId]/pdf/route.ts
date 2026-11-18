@@ -3,7 +3,6 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import { renderReceiptPdf } from "@/lib/receipts/pdf";
 import { uuid } from "@/lib/validation/schemas";
 import { serverEnv } from "@/lib/env";
-import type { ReceiptRow } from "@/types/database";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

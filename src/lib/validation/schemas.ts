@@ -33,6 +33,7 @@ export const safeText = (max: number) =>
     .string()
     .trim()
     .max(max)
+    // oxlint-disable-next-line no-control-regex -- retrait volontaire des caractères de contrôle
     .transform((v) => v.replace(/[\u0000-\u001f\u007f<>]/g, ""));
 
 export const initiateMobileMoneySchema = z.object({

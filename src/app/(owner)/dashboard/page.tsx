@@ -5,7 +5,7 @@ import { Brand } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { requireOrgMember } from "@/lib/auth/session";
 import { currentPeriod, formatPeriod } from "@/lib/format";
-import type { DashboardKpis, InvoiceRow, PendingTransferRow } from "@/types/database";
+import type { DashboardKpis, PendingTransferRow } from "@/types/database";
 import { KpiGrid } from "./_components/kpi-grid";
 import { InvoiceList } from "./_components/invoice-list";
 import { PendingTransfers } from "./_components/pending-transfers";

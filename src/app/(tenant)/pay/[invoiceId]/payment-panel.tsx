@@ -1,6 +1,6 @@
 "use client";
 import { useActionState, useState, useTransition } from "react";
-import { Building, Check, Copy, Lock, Smartphone, Upload } from "lucide-react";
+import { Building, Check, Copy, Lock, Smartphone, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -97,7 +97,14 @@ function MobileMoney({ invoiceId, remaining }: { invoiceId: string; remaining: n
 }
 
 function CopyField({ label, value, display, emphasize }: { label: string; value: string; display?: string; emphasize?: boolean }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"ok" | "ko" | null>(null);
+  const copy = () => {
+    // Le presse-papier peut être refusé (contexte non sécurisé, permission) : on le signale.
+    navigator.clipboard.writeText(value).then(
+      () => setCopied("ok"),
+      () => setCopied("ko"),
+    ).finally(() => setTimeout(() => setCopied(null), 1500));
+  };
   return (
     <div className={cn("flex items-center justify-between gap-3 rounded-lg border p-3", emphasize && "border-accent bg-accent/8")}>
       <div className="min-w-0">
@@ -106,9 +113,9 @@ function CopyField({ label, value, display, emphasize }: { label: string; value:
       </div>
       <Button
         type="button" size="icon" variant="ghost" aria-label={`Copier ${label}`}
-        onClick={async () => { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+        onClick={copy}
       >
-        {copied ? <Check className="text-success" /> : <Copy />}
+        {copied === "ok" ? <Check className="text-success" /> : copied === "ko" ? <X className="text-danger" /> : <Copy />}
       </Button>
     </div>
   );
