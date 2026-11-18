@@ -569,4 +569,92 @@ begin
   raise notice 'OK  S5 audit v2 : altération du user_agent détectée au maillon %', b.broken_at_seq;
 end $$;
 
+
+-- =============================================================================
+-- P1.1 — Schéma du paiement direct
+-- =============================================================================
+do $$
+declare v_inv public.invoices;
+begin
+  select * into v_inv from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000001';
+  insert into public.payments (org_id, invoice_id, method, provider, operator, amount, status, provider_transaction_id, operator_txn_ref, declared_by)
+  values (v_inv.org_id, v_inv.id, 'mobile_money', 'direct', 'wave', 1000, 'en_attente_validation', 'DIR-' || gen_random_uuid(), 'T2611AB12CD', 'a0000000-0000-4000-8000-000000000003');
+  begin
+    insert into public.payments (org_id, invoice_id, method, provider, operator, amount, status, provider_transaction_id, operator_txn_ref, declared_by)
+    values (v_inv.org_id, v_inv.id, 'mobile_money', 'direct', 'wave', 1000, 'en_attente_validation', 'DIR-' || gen_random_uuid(), 't2611ab12cd', 'a0000000-0000-4000-8000-000000000004');
+    raise exception 'ÉCHEC : n° de transaction opérateur réutilisé (casse différente)';
+  exception when unique_violation then null;
+  end;
+  begin
+    insert into public.payments (org_id, invoice_id, method, provider, operator, amount, status, provider_transaction_id, declared_by)
+    values (v_inv.org_id, v_inv.id, 'mobile_money', 'direct', 'wave', 1000, 'en_attente_validation', 'DIR-' || gen_random_uuid(), 'a0000000-0000-4000-8000-000000000003');
+    raise exception 'ÉCHEC : paiement direct sans n° de transaction';
+  exception when check_violation then null;
+  end;
+  delete from public.payments where operator_txn_ref = 'T2611AB12CD';
+  raise notice 'OK  P1.1 n° de transaction opérateur unique (insensible à la casse) et obligatoire';
+end $$;
+
+set role service_role;
+do $$ begin
+  begin
+    perform public.add_payout_account('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001',
+      'pispi_alias', 'AKWABA', null, null, null, null, null, null);
+    raise exception 'ÉCHEC : alias PI-SPI absent accepté';
+  exception when check_violation then null;
+  end;
+  raise notice 'OK  P1.1 coordonnées : champs obligatoires par type contrôlés';
+end $$;
+reset role;
+do $$ begin
+  begin
+    insert into public.payout_accounts (org_id, kind, account_holder, pispi_alias, created_by)
+    values ('c0000000-0000-4000-8000-000000000001', 'pispi_alias', 'AKWABA', '+2250707', 'a0000000-0000-4000-8000-000000000001');
+    raise exception 'ÉCHEC : alias PI-SPI mal formé accepté';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.payout_accounts (org_id, kind, account_holder, pispi_alias, created_by)
+    values ('c0000000-0000-4000-8000-000000000001', 'pispi_alias', 'AKWABA', '6f1c2b8e-1d2a-1b3c-8d4e-123456789abc', 'a0000000-0000-4000-8000-000000000001');
+    raise exception 'ÉCHEC : SHID non UUID v4 accepté';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.payout_accounts (org_id, kind, account_holder, operator, payment_link_url, created_by)
+    values ('c0000000-0000-4000-8000-000000000001', 'payment_link', 'AKWABA', 'wave', 'https://pay.escroc.example/akwaba', 'a0000000-0000-4000-8000-000000000001');
+    raise exception 'ÉCHEC : lien marchand hors liste blanche accepté';
+  exception when invalid_parameter_value then null;
+  end;
+  insert into public.allowed_payment_link_hosts (host, operator, note) values ('pay.exemple-operateur.ci', 'wave', 'test');
+  begin
+    insert into public.payout_accounts (org_id, kind, account_holder, operator, payment_link_url, created_by)
+    values ('c0000000-0000-4000-8000-000000000001', 'payment_link', 'AKWABA', 'orange', 'https://pay.exemple-operateur.ci/m/akwaba', 'a0000000-0000-4000-8000-000000000001');
+    raise exception 'ÉCHEC : hôte autorisé pour un autre opérateur accepté';
+  exception when invalid_parameter_value then null;
+  end;
+  delete from public.allowed_payment_link_hosts;
+  raise notice 'OK  P1.1 alias PI-SPI (+225… ou UUID v4) et liens marchands en liste blanche par opérateur';
+end $$;
+
+-- Paramètres : un locataire lit ceux de SON bailleur seulement ; personne n'écrit
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000003';
+do $$ begin
+  assert (select count(*) from public.org_payment_settings) = 1, 'le locataire doit lire les paramètres de son bailleur uniquement';
+  assert (select cinetpay_enabled from public.org_payment_settings) = false, 'CinetPay doit être désactivé par défaut';
+  assert (select count(*) from public.operator_ref_formats) = 4, 'formats de référence lisibles';
+  begin
+    update public.org_payment_settings set cinetpay_enabled = true;
+    raise exception 'ÉCHEC : un locataire modifie les paramètres de paiement';
+  exception when insufficient_privilege then null;
+  end;
+  raise notice 'OK  P1.1 paramètres de paiement : lecture cloisonnée, CinetPay désactivé par défaut, aucune écriture client';
+end $$;
+reset role;
+do $$ begin
+  insert into public.organizations (id, name) values ('c0000000-0000-4000-8000-000000000009', 'Nouvelle agence');
+  assert exists (select 1 from public.org_payment_settings where org_id = 'c0000000-0000-4000-8000-000000000009'), 'paramètres par défaut non créés';
+  raise notice 'OK  P1.1 paramètres par défaut créés avec l''organisation';
+end $$;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

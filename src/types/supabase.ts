@@ -3,6 +3,28 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      allowed_payment_link_hosts: {
+        Row: {
+          created_at: string;
+          host: string;
+          note: string | null;
+          operator: Database["public"]["Enums"]["mobile_operator"];
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          host: string;
+          note?: string | null;
+          operator: Database["public"]["Enums"]["mobile_operator"];
+        };
+        Update: {
+          created_at?: string;
+          host?: string;
+          note?: string | null;
+          operator?: Database["public"]["Enums"]["mobile_operator"];
+        };
+        Relationships: [];
+      };
       audit_logs: {
         Row: {
           action: string;
@@ -247,6 +269,70 @@ export type Database = {
           },
         ];
       };
+      operator_ref_formats: {
+        Row: {
+          example: string | null;
+          operator: Database["public"]["Enums"]["mobile_operator"];
+          pattern: string;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          example?: string | null;
+          operator: Database["public"]["Enums"]["mobile_operator"];
+          pattern: string;
+          updated_at?: string;
+        };
+        Update: {
+          example?: string | null;
+          operator?: Database["public"]["Enums"]["mobile_operator"];
+          pattern?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      org_payment_settings: {
+        Row: {
+          cash_validation_threshold: number;
+          cinetpay_enabled: boolean;
+          direct_enabled: boolean;
+          fees_notice: string | null;
+          org_id: string;
+          transfer_enabled: boolean;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          cash_validation_threshold?: number;
+          cinetpay_enabled?: boolean;
+          direct_enabled?: boolean;
+          fees_notice?: string | null;
+          org_id: string;
+          transfer_enabled?: boolean;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          cash_validation_threshold?: number;
+          cinetpay_enabled?: boolean;
+          direct_enabled?: boolean;
+          fees_notice?: string | null;
+          org_id?: string;
+          transfer_enabled?: boolean;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "org_payment_settings_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: true;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       organizations: {
         Row: {
           contact_phone: string | null;
@@ -288,7 +374,9 @@ export type Database = {
           invoice_id: string;
           method: Database["public"]["Enums"]["payment_method"];
           operator: Database["public"]["Enums"]["mobile_operator"] | null;
+          operator_txn_ref: string | null;
           org_id: string;
+          payer_msisdn: string | null;
           proof_path: string | null;
           provider: Database["public"]["Enums"]["payment_provider"];
           provider_transaction_id: string;
@@ -310,7 +398,9 @@ export type Database = {
           invoice_id: string;
           method: Database["public"]["Enums"]["payment_method"];
           operator?: Database["public"]["Enums"]["mobile_operator"] | null;
+          operator_txn_ref?: string | null;
           org_id: string;
+          payer_msisdn?: string | null;
           proof_path?: string | null;
           provider: Database["public"]["Enums"]["payment_provider"];
           provider_transaction_id: string;
@@ -331,7 +421,9 @@ export type Database = {
           invoice_id?: string;
           method?: Database["public"]["Enums"]["payment_method"];
           operator?: Database["public"]["Enums"]["mobile_operator"] | null;
+          operator_txn_ref?: string | null;
           org_id?: string;
+          payer_msisdn?: string | null;
           proof_path?: string | null;
           provider?: Database["public"]["Enums"]["payment_provider"];
           provider_transaction_id?: string;
@@ -364,12 +456,15 @@ export type Database = {
           bank_name: string | null;
           created_at: string;
           created_by: string;
+          display_name_expected: string | null;
           iban: string | null;
           id: string;
           kind: Database["public"]["Enums"]["payout_kind"];
           msisdn: string | null;
           operator: Database["public"]["Enums"]["mobile_operator"] | null;
           org_id: string;
+          payment_link_url: string | null;
+          pispi_alias: string | null;
           revoked_at: string | null;
         };
         ComputedFields: never;
@@ -379,12 +474,15 @@ export type Database = {
           bank_name?: string | null;
           created_at?: string;
           created_by: string;
+          display_name_expected?: string | null;
           iban?: string | null;
           id?: string;
           kind: Database["public"]["Enums"]["payout_kind"];
           msisdn?: string | null;
           operator?: Database["public"]["Enums"]["mobile_operator"] | null;
           org_id: string;
+          payment_link_url?: string | null;
+          pispi_alias?: string | null;
           revoked_at?: string | null;
         };
         Update: {
@@ -393,12 +491,15 @@ export type Database = {
           bank_name?: string | null;
           created_at?: string;
           created_by?: string;
+          display_name_expected?: string | null;
           iban?: string | null;
           id?: string;
           kind?: Database["public"]["Enums"]["payout_kind"];
           msisdn?: string | null;
           operator?: Database["public"]["Enums"]["mobile_operator"] | null;
           org_id?: string;
+          payment_link_url?: string | null;
+          pispi_alias?: string | null;
           revoked_at?: string | null;
         };
         Relationships: [
@@ -815,9 +916,9 @@ export type Database = {
       member_role: "owner" | "manager" | "accountant";
       mobile_operator: "orange" | "mtn" | "moov" | "wave";
       payment_method: "mobile_money" | "virement" | "especes";
-      payment_provider: "cinetpay" | "wave" | "pispi" | "manuel";
+      payment_provider: "cinetpay" | "wave" | "pispi" | "manuel" | "direct";
       payment_status: "initie" | "en_attente_validation" | "reussi" | "echoue" | "rejete";
-      payout_kind: "banque" | "mobile_money";
+      payout_kind: "banque" | "mobile_money" | "pispi_alias" | "payment_link";
       property_type: "appartement" | "villa" | "studio" | "magasin" | "bureau" | "entrepot";
       receipt_status: "valide" | "annulee";
     };
@@ -941,9 +1042,9 @@ export const Constants = {
       member_role: ["owner", "manager", "accountant"],
       mobile_operator: ["orange", "mtn", "moov", "wave"],
       payment_method: ["mobile_money", "virement", "especes"],
-      payment_provider: ["cinetpay", "wave", "pispi", "manuel"],
+      payment_provider: ["cinetpay", "wave", "pispi", "manuel", "direct"],
       payment_status: ["initie", "en_attente_validation", "reussi", "echoue", "rejete"],
-      payout_kind: ["banque", "mobile_money"],
+      payout_kind: ["banque", "mobile_money", "pispi_alias", "payment_link"],
       property_type: ["appartement", "villa", "studio", "magasin", "bureau", "entrepot"],
       receipt_status: ["valide", "annulee"],
     },
