@@ -459,7 +459,8 @@ begin
    where n.nspname in ('public', 'private') and has_function_privilege('authenticated', p.oid, 'execute')
      and p.oid::regprocedure::text not in (
        'private.user_org_ids(member_role[])', 'private.user_tenant_ids()', 'private.tenant_org_ids()',
-       'private.tenant_property_ids()', 'get_transfer_instructions(uuid)', 'dashboard_kpis(uuid,date)');
+       'private.tenant_property_ids()', 'get_transfer_instructions(uuid)', 'dashboard_kpis(uuid,date)',
+       'get_direct_payment_instructions(uuid)');
   assert v is null, 'fonctions exécutables par authenticated hors liste blanche : ' || v;
 
   select string_agg(c.relname, ', ') into v
@@ -655,6 +656,208 @@ do $$ begin
   insert into public.organizations (id, name) values ('c0000000-0000-4000-8000-000000000009', 'Nouvelle agence');
   assert exists (select 1 from public.org_payment_settings where org_id = 'c0000000-0000-4000-8000-000000000009'), 'paramètres par défaut non créés';
   raise notice 'OK  P1.1 paramètres par défaut créés avec l''organisation';
+end $$;
+
+
+-- =============================================================================
+-- P1.2 — Paiement direct, validation manuelle unifiée, espèces (D2), paramètres
+-- =============================================================================
+insert into auth.users (id, email) values ('a0000000-0000-4000-8000-000000000005', 'compta@akwaba-immo.ci');
+insert into public.memberships (org_id, user_id, role) values
+  ('c0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000005', 'accountant');
+-- Compte Wave de la propriétaire dont la carence est écoulée (simulée) ; le compte
+-- « PIRATE 3 » (Wave, en carence) ajouté en S1 ne doit jamais être servi.
+insert into public.payout_accounts (org_id, kind, account_holder, operator, msisdn, display_name_expected, activates_at, created_by)
+values ('c0000000-0000-4000-8000-000000000001', 'mobile_money', 'Akwaba Immobilier SARL', 'orange', '2250707000111',
+        'AKWABA IMMOBILIER', now() - interval '1 hour', 'a0000000-0000-4000-8000-000000000001');
+set role service_role;
+select public.generate_monthly_invoices('2026-06-01') \g /dev/null
+reset role;
+
+-- Instructions : comptes EFFECTIFS du bailleur, pour SON avis uniquement
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000003';
+do $$
+declare v_inv uuid := (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000001' and period = '2026-06-01');
+begin
+  assert (select count(*) from public.get_direct_payment_instructions(v_inv)) = 1, 'un seul compte effectif attendu (pas celui en carence)';
+  assert (select display_name from public.get_direct_payment_instructions(v_inv)) = 'AKWABA IMMOBILIER', 'nom attendu du bénéficiaire';
+  assert (select amount_remaining from public.get_direct_payment_instructions(v_inv)) = 450000, 'reste dû';
+  assert not exists (select 1 from public.get_direct_payment_instructions(v_inv) where msisdn = '2250707999999'), 'compte pirate en carence servi';
+end $$;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000004';
+do $$ begin
+  perform public.get_direct_payment_instructions((select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000001' and period = '2026-06-01'));
+  raise exception 'ÉCHEC : un autre locataire lit les coordonnées de réception';
+exception when insufficient_privilege then null;
+end $$;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000002';
+do $$ begin
+  perform public.get_direct_payment_instructions((select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000001' and period = '2026-06-01'));
+  raise exception 'ÉCHEC : un gestionnaire lit les coordonnées via la fonction locataire';
+exception when insufficient_privilege then
+  raise notice 'OK  P1.2 instructions : comptes effectifs seulement, nom attendu, réservées au locataire de l''avis';
+end $$;
+reset role;
+
+-- Déclarations du locataire
+set role service_role;
+do $$
+declare
+  v_inv uuid := (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000001' and period = '2026-06-01');
+  v_tra uuid := (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000002' and period = '2026-06-01');
+  v_kouassi constant uuid := 'a0000000-0000-4000-8000-000000000003';
+  p1 uuid; p2 uuid; p3 uuid;
+begin
+  begin
+    perform public.submit_direct_payment('a0000000-0000-4000-8000-000000000004', v_inv, 'orange', 1000, 'MP261119.0001', null, null, null, null);
+    raise exception 'ÉCHEC : déclaration sur l''avis d''un autre locataire';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.submit_direct_payment(v_kouassi, v_inv, 'orange', 450001, 'MP261119.0001', null, null, null, null);
+    raise exception 'ÉCHEC : montant supérieur au reste dû accepté';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.submit_direct_payment(v_kouassi, v_inv, 'orange', 1000, 'a b', null, null, null, null);
+    raise exception 'ÉCHEC : n° de transaction mal formé accepté';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.submit_direct_payment(v_kouassi, v_inv, 'orange', 1000, 'MP261119.0001', null,
+      'c0000000-0000-4000-8000-000000000002/' || gen_random_uuid() || '/' || gen_random_uuid() || '.jpg', null, null);
+    raise exception 'ÉCHEC : chemin de preuve étranger accepté';
+  exception when invalid_parameter_value then null;
+  end;
+
+  p1 := public.submit_direct_payment(v_kouassi, v_inv, 'orange', 200000, ' MP261119.0001 ', '2250707123456', null, '41.66.1.2', 'Android');
+  assert (select amount_paid from public.invoices where id = v_inv) = 0, 'une déclaration ne doit rien imputer';
+  assert not exists (select 1 from public.receipts where invoice_id = v_inv), 'une déclaration ne doit jamais émettre de quittance';
+
+  begin -- même transaction présentée par un autre locataire, casse différente
+    perform public.submit_direct_payment('a0000000-0000-4000-8000-000000000004', v_tra, 'orange', 1000, 'mp261119.0001', null, null, null, null);
+    raise exception 'ÉCHEC : n° de transaction réutilisé accepté';
+  exception when raise_exception then
+    assert sqlerrm like '%déjà été déclaré%', 'message inattendu : ' || sqlerrm;
+  end;
+
+  p2 := public.submit_direct_payment(v_kouassi, v_inv, 'wave', 150000, 'T26111900002', null, null, null, null);
+  p3 := public.submit_direct_payment(v_kouassi, v_inv, 'orange', 100000, 'MP261119.0003', null, null, null, null);
+  begin
+    perform public.submit_direct_payment(v_kouassi, v_inv, 'orange', 1000, 'MP261119.0004', null, null, null, null);
+    raise exception 'ÉCHEC : 4e déclaration en attente acceptée';
+  exception when raise_exception then null;
+  end;
+  raise notice 'OK  P1.2 déclaration : appartenance, montant, format, chemin, unicité inter-locataires, 3 en attente max, aucune imputation';
+
+  -- Validation
+  begin
+    perform public.review_manual_payment('a0000000-0000-4000-8000-000000000002', p1, true, null, null, null);
+    raise exception 'ÉCHEC : un gestionnaire a validé un paiement direct';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.review_transfer('a0000000-0000-4000-8000-000000000001', p1, true, null, null, null);
+    raise exception 'ÉCHEC : review_transfer a traité un paiement direct';
+  exception when invalid_parameter_value then null;
+  end;
+  assert public.review_manual_payment('a0000000-0000-4000-8000-000000000005', p1, true, null, '41.202.10.6', 'Chrome') = 'valide', 'validation comptable';
+  assert public.review_manual_payment('a0000000-0000-4000-8000-000000000001', p1, true, null, null, null) = 'deja_traite', 'double validation';
+  begin
+    perform public.review_manual_payment('a0000000-0000-4000-8000-000000000001', p3, false, 'non', null, null);
+    raise exception 'ÉCHEC : rejet sans motif accepté';
+  exception when invalid_parameter_value then null;
+  end;
+  assert public.review_manual_payment('a0000000-0000-4000-8000-000000000001', p3, false, 'Montant absent de l''historique Orange Money', null, null) = 'rejete', 'rejet';
+  assert (select amount_paid from public.invoices where id = v_inv) = 200000, 'le rejet ne doit rien imputer';
+  assert not exists (select 1 from public.receipts where invoice_id = v_inv), 'pas de quittance sur un paiement partiel';
+  begin -- la référence rejetée ne peut pas être resoumise telle quelle
+    perform public.submit_direct_payment(v_kouassi, v_inv, 'orange', 100000, 'MP261119.0003', null, null, null, null);
+    raise exception 'ÉCHEC : référence rejetée resoumise';
+  exception when raise_exception then null;
+  end;
+  p3 := public.submit_direct_payment(v_kouassi, v_inv, 'mtn', 100000, 'MTN.26111905', null, null, null, null);
+  assert public.review_manual_payment('a0000000-0000-4000-8000-000000000001', p2, true, null, null, null) = 'valide', 'p2';
+  assert public.review_manual_payment('a0000000-0000-4000-8000-000000000001', p3, true, null, null, null) = 'valide', 'p3';
+  assert (select status from public.invoices where id = v_inv) = 'paye', 'avis soldé attendu';
+  assert (select count(*) from public.receipts where invoice_id = v_inv and signature_version = 2) = 1, 'une seule quittance v2';
+  assert (select payment_methods from public.receipts where invoice_id = v_inv) = 'mobile_money', 'mode de règlement';
+  raise notice 'OK  P1.2 validation : gestionnaire refusé, double validation idempotente, rejet motivé sans effet, soldé -> 1 quittance';
+end $$;
+reset role;
+do $$ begin
+  assert (select count(*) from public.audit_logs where action = 'paiement_direct_declare') = 4, 'déclarations tracées';
+  assert (select count(*) from public.audit_logs where action = 'paiement_direct_confirme') = 3, 'confirmations tracées';
+  assert (select count(*) from public.audit_logs where action = 'paiement_direct_rejete') = 1, 'rejet tracé';
+  assert not exists (select 1 from public.audit_logs where metadata::text like '%2250707123456%'), 'numéro payeur en clair dans l''audit';
+  raise notice 'OK  P1.2 audit : déclarations, confirmations, rejet tracés ; numéro payeur masqué';
+end $$;
+
+-- Espèces (décision D2)
+set role service_role;
+do $$
+declare
+  v_tra uuid := (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000002' and period = '2026-06-01');
+  r record;
+begin
+  select * into r from public.record_cash_payment('a0000000-0000-4000-8000-000000000005', v_tra, 150000, '41.202.10.6', 'Chrome');
+  assert r.status = 'en_attente_validation', 'D2 : espèces > seuil par un comptable doivent attendre';
+  assert (select amount_paid from public.invoices where id = v_tra) = 0, 'D2 : imputation prématurée';
+  begin
+    perform public.review_manual_payment('a0000000-0000-4000-8000-000000000005', r.payment_id, true, null, null, null);
+    raise exception 'ÉCHEC : un comptable confirme des espèces';
+  exception when insufficient_privilege then null;
+  end;
+  assert public.review_manual_payment('a0000000-0000-4000-8000-000000000001', r.payment_id, true, null, null, null) = 'valide', 'D2 : confirmation propriétaire';
+  assert (select amount_paid from public.invoices where id = v_tra) = 150000, 'D2 : imputation après confirmation';
+  select * into r from public.record_cash_payment('a0000000-0000-4000-8000-000000000005', v_tra, 50000, null, null);
+  assert r.status = 'reussi', 'D2 : sous le seuil, imputation immédiate';
+  begin
+    perform public.record_cash_payment('a0000000-0000-4000-8000-000000000002', v_tra, 1000, null, null);
+    raise exception 'ÉCHEC : un gestionnaire encaisse des espèces';
+  exception when insufficient_privilege then null;
+  end;
+  raise notice 'OK  P1.2 espèces (D2) : au-delà du seuil, attente et confirmation par le propriétaire seul';
+end $$;
+
+-- Paramètres de paiement
+do $$
+declare v_inv uuid := (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000002' and period = '2026-06-01');
+begin
+  begin
+    perform public.set_payment_settings('a0000000-0000-4000-8000-000000000005', 'c0000000-0000-4000-8000-000000000001', true, false, true, null, null, null, null);
+    raise exception 'ÉCHEC : un comptable modifie les paramètres';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.set_payment_settings('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', false, false, false, null, null, null, null);
+    raise exception 'ÉCHEC : tous les modes désactivés';
+  exception when invalid_parameter_value then null;
+  end;
+  perform public.set_payment_settings('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001',
+    false, false, true, '  Frais de transfert à la charge du locataire.  ', 200000, '41.202.10.5', 'Chrome');
+  begin
+    perform public.submit_direct_payment('a0000000-0000-4000-8000-000000000004', v_inv, 'orange', 1000, 'MP261119.0099', null, null, null, null);
+    raise exception 'ÉCHEC : déclaration directe acceptée alors que le mode est désactivé';
+  exception when raise_exception then null;
+  end;
+end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000004';
+do $$ begin
+  assert (select count(*) from public.get_direct_payment_instructions(
+    (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000002' and period = '2026-06-01'))) = 0,
+    'coordonnées servies alors que le paiement direct est désactivé';
+  assert (select fees_notice from public.org_payment_settings) = 'Frais de transfert à la charge du locataire.', 'texte des frais';
+end $$;
+reset role;
+do $$ begin
+  assert exists (select 1 from public.audit_logs where action = 'parametres_paiement_modifies'
+                 and metadata -> 'apres' ->> 'direct' = 'false' and metadata -> 'avant' ->> 'direct' = 'true'), 'modification non tracée';
+  update public.org_payment_settings set direct_enabled = true where org_id = 'c0000000-0000-4000-8000-000000000001';
+  raise notice 'OK  P1.2 paramètres : propriétaire seul, au moins un mode actif, désactivation effective, avant/après tracés';
 end $$;
 
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

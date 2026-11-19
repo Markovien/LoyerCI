@@ -29,16 +29,33 @@ done
 
 # --- Concurrence : deux notifications identiques traitées en parallèle -------------
 echo "→ test de concurrence (2 webhooks simultanés)"
-"${PSQL[@]}" -c "set role service_role; select * from public.create_payment_intent('a0000000-0000-4000-8000-000000000004', (select id from public.invoices where lease_id='f0000000-0000-4000-8000-000000000002'), 'cinetpay', 'orange', 'TX-CONC-00000001', null, null);" >/dev/null
+"${PSQL[@]}" -c "set role service_role; select * from public.create_payment_intent('a0000000-0000-4000-8000-000000000004', (select id from public.invoices where lease_id='f0000000-0000-4000-8000-000000000002' and period='2026-05-01'), 'cinetpay', 'orange', 'TX-CONC-00000001', null, null);" >/dev/null
 CONFIRM="set role service_role; select public.confirm_provider_payment('cinetpay','TX-CONC-00000001',165000,'XOF','orange',null,'{}');"
 "${PSQL[@]}" -At -c "$CONFIRM" > "$DATA/r1" &
 "${PSQL[@]}" -At -c "$CONFIRM" > "$DATA/r2" &
 wait
 RESULTS="$(cat "$DATA/r1" "$DATA/r2" | sort | tr '\n' ' ')"
-PAID="$("${PSQL[@]}" -At -c "select amount_paid || '/' || status from public.invoices where lease_id='f0000000-0000-4000-8000-000000000002'")"
-RECEIPTS="$("${PSQL[@]}" -At -c "select count(*) from public.receipts where invoice_id=(select id from public.invoices where lease_id='f0000000-0000-4000-8000-000000000002')")"
+PAID="$("${PSQL[@]}" -At -c "select amount_paid || '/' || status from public.invoices where lease_id='f0000000-0000-4000-8000-000000000002' and period='2026-05-01'")"
+RECEIPTS="$("${PSQL[@]}" -At -c "select count(*) from public.receipts where invoice_id=(select id from public.invoices where lease_id='f0000000-0000-4000-8000-000000000002' and period='2026-05-01')")"
 if [[ "$RESULTS" == "confirme deja_traite " && "$PAID" == "265000/paye" && "$RECEIPTS" == "1" ]]; then
   echo "  OK  concurrence : [$RESULTS] → avis $PAID, $RECEIPTS quittance"
 else
   echo "  ÉCHEC concurrence : [$RESULTS] avis=$PAID quittances=$RECEIPTS"; exit 1
+fi
+
+# --- Concurrence : deux validations simultanées d'un même paiement direct ----------
+echo "→ test de concurrence (2 validations simultanées d'un paiement direct)"
+INV_JUL="(select id from public.invoices where lease_id='f0000000-0000-4000-8000-000000000001' and period='2026-07-01')"
+"${PSQL[@]}" -c "set role service_role; select public.generate_monthly_invoices('2026-07-01');" >/dev/null
+PAY="$("${PSQL[@]}" -At -c "set role service_role; select public.submit_direct_payment('a0000000-0000-4000-8000-000000000003', $INV_JUL, 'orange', 450000, 'MP-CONC-0001', null, null, null, null);" | tail -1)"
+REVIEW="set role service_role; select public.review_manual_payment('a0000000-0000-4000-8000-000000000001', '$PAY', true, null, null, null);"
+"${PSQL[@]}" -At -c "$REVIEW" > "$DATA/v1" &
+"${PSQL[@]}" -At -c "$REVIEW" > "$DATA/v2" &
+wait
+RESULTS="$(cat "$DATA/v1" "$DATA/v2" | grep -v '^SET$' | sort | tr '\n' ' ')"
+STATE="$("${PSQL[@]}" -At -c "select amount_paid || '/' || status || '/' || (select count(*) from public.receipts r where r.invoice_id = i.id) from public.invoices i where id = $INV_JUL")"
+if [[ "$RESULTS" == "deja_traite valide " && "$STATE" == "450000/paye/1" ]]; then
+  echo "  OK  concurrence : [$RESULTS] → avis $STATE (montant/statut/quittances)"
+else
+  echo "  ÉCHEC concurrence validation : [$RESULTS] état=$STATE"; exit 1
 fi

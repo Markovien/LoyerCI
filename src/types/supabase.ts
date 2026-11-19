@@ -847,6 +847,21 @@ export type Database = {
         Returns: string;
       };
       generate_monthly_invoices: { Args: { p_period?: string }; Returns: number };
+      get_direct_payment_instructions: {
+        Args: { p_invoice: string };
+        Returns: {
+          amount_remaining: number;
+          display_name: string;
+          due_date: string;
+          fees_notice: string;
+          kind: Database["public"]["Enums"]["payout_kind"];
+          msisdn: string;
+          operator: Database["public"]["Enums"]["mobile_operator"];
+          payment_link_url: string;
+          payment_reference: string;
+          pispi_alias: string;
+        }[];
+      };
       get_transfer_instructions: {
         Args: { p_invoice: string };
         Returns: {
@@ -865,6 +880,20 @@ export type Database = {
       mark_overdue_invoices: { Args: Record<PropertyKey, never>; Returns: number };
       record_cash_payment: {
         Args: { p_actor: string; p_amount: number; p_invoice: string; p_ip: unknown; p_ua: string };
+        Returns: {
+          payment_id: string;
+          status: Database["public"]["Enums"]["payment_status"];
+        }[];
+      };
+      review_manual_payment: {
+        Args: {
+          p_actor: string;
+          p_approve: boolean;
+          p_ip: unknown;
+          p_payment: string;
+          p_reason: string;
+          p_ua: string;
+        };
         Returns: string;
       };
       review_transfer: {
@@ -879,6 +908,34 @@ export type Database = {
         Returns: string;
       };
       set_checkout_url: { Args: { p_payment: string; p_url: string }; Returns: undefined };
+      set_payment_settings: {
+        Args: {
+          p_actor: string;
+          p_cash_threshold: number;
+          p_cinetpay: boolean;
+          p_direct: boolean;
+          p_fees_notice: string;
+          p_ip: unknown;
+          p_org: string;
+          p_transfer: boolean;
+          p_ua: string;
+        };
+        Returns: undefined;
+      };
+      submit_direct_payment: {
+        Args: {
+          p_actor: string;
+          p_amount: number;
+          p_invoice: string;
+          p_ip: unknown;
+          p_operator: Database["public"]["Enums"]["mobile_operator"];
+          p_payer_msisdn: string;
+          p_proof_path: string;
+          p_txn_ref: string;
+          p_ua: string;
+        };
+        Returns: string;
+      };
       submit_transfer_proof: {
         Args: {
           p_actor: string;

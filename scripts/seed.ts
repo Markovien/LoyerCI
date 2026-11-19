@@ -187,13 +187,13 @@ async function main() {
 
   console.log("→ Paiements");
   // Seuls les locataires disposant d'un compte peuvent initier un paiement en ligne ;
-  // les autres règlements du mois précédent sont saisis en espèces par la comptable.
+  // les autres règlements du mois précédent sont encaissés en espèces par la propriétaire.
   await mobileMoney("Kouassi", kouassi, prev, "wave");
   await mobileMoney("Traoré", traore, prev, "mtn");
   for (const t of ["Koné", "Bamba", "Cabinet", "Ouattara"]) {
     const i = inv(t, prev);
     await must(
-      db.rpc("record_cash_payment", { p_actor: accountant, p_invoice: i.id, p_amount: i.amount_due, p_ip: "127.0.0.1", p_ua: "seed" }),
+      db.rpc("record_cash_payment", { p_actor: owner, p_invoice: i.id, p_amount: i.amount_due, p_ip: "127.0.0.1", p_ua: "seed" }),
       "espèces M-1",
     );
   }
@@ -220,7 +220,7 @@ async function main() {
     "virement",
   );
 
-  // Koné : acompte en espèces
+  // Koné : acompte en espèces saisi par la comptable (sous le seuil : imputé aussitôt)
   await must(
     db.rpc("record_cash_payment", {
       p_actor: accountant,
@@ -231,7 +231,8 @@ async function main() {
     }),
     "acompte",
   );
-  // Bamba : soldé en espèces au bureau
+  // Bamba : espèces saisies par la comptable AU-DELÀ du seuil (décision D2) :
+  // en attente de confirmation par la propriétaire, aucune quittance avant.
   const b = inv("Bamba", cur);
   await must(
     db.rpc("record_cash_payment", { p_actor: accountant, p_invoice: b.id, p_amount: b.amount_due, p_ip: "127.0.0.1", p_ua: "seed" }),

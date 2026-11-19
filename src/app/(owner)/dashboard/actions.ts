@@ -28,7 +28,9 @@ export async function reviewTransfer(input: unknown): Promise<ActionResult> {
   const parsed = reviewTransferSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Saisie invalide" };
 
-  const { data, error } = await supabaseAdmin().rpc("review_transfer", {
+  // Fonction unifiée (P1.2) : virements, paiements directs et espèces en attente.
+  // Le rôle requis est revérifié en base (espèces : propriétaire uniquement).
+  const { data, error } = await supabaseAdmin().rpc("review_manual_payment", {
     p_actor: g.user.id,
     p_payment: parsed.data.paymentId,
     p_approve: parsed.data.decision === "valider",
@@ -40,9 +42,9 @@ export async function reviewTransfer(input: unknown): Promise<ActionResult> {
 
   revalidatePath("/dashboard");
   const messages: Record<string, string> = {
-    valide: "Virement validé. La quittance est générée si l'avis est soldé.",
-    rejete: "Virement rejeté. Le locataire verra le motif.",
-    deja_traite: "Ce virement a déjà été traité.",
+    valide: "Paiement confirmé. La quittance est générée si l'avis est soldé.",
+    rejete: "Paiement rejeté. Le locataire verra le motif.",
+    deja_traite: "Ce paiement a déjà été traité.",
   };
   return { ok: data !== "deja_traite", message: messages[data as string] ?? "Opération effectuée." };
 }
@@ -74,14 +76,19 @@ export async function recordCashPayment(input: unknown): Promise<ActionResult> {
   const parsed = cashPaymentSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Saisie invalide" };
 
-  const { error } = await supabaseAdmin().rpc("record_cash_payment", {
-    p_actor: g.user.id,
-    p_invoice: parsed.data.invoiceId,
-    p_amount: parsed.data.amount,
-    p_ip: g.ctx.ip,
-    p_ua: g.ctx.userAgent,
-  });
-  if (error) return { ok: false, message: dbErrorMessage(error) };
+  const { data, error } = await supabaseAdmin()
+    .rpc("record_cash_payment", {
+      p_actor: g.user.id,
+      p_invoice: parsed.data.invoiceId,
+      p_amount: parsed.data.amount,
+      p_ip: g.ctx.ip,
+      p_ua: g.ctx.userAgent,
+    })
+    .single();
+  if (error || !data) return { ok: false, message: dbErrorMessage(error) };
   revalidatePath("/dashboard");
-  return { ok: true, message: "Encaissement en espèces enregistré." };
+  // Décision D2 : au-delà du seuil, un encaissement saisi par un comptable attend le propriétaire.
+  return data.status === "en_attente_validation"
+    ? { ok: true, message: "Encaissement enregistré, en attente de confirmation par le propriétaire (au-delà du seuil)." }
+    : { ok: true, message: "Encaissement en espèces enregistré." };
 }
