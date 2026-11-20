@@ -5,11 +5,16 @@
  */
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import postgres from "postgres";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY manquant");
 if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(url).hostname)) throw new Error("Seed autorisé uniquement en local");
+// Base locale de `supabase start` (superutilisateur), réservée aux seules opérations de démo
+// impossibles via l'API. Tout hôte non local est refusé.
+const localDbUrl = process.env.SUPABASE_DB_URL ?? "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+if (!["127.0.0.1", "localhost"].includes(new URL(localDbUrl).hostname)) throw new Error("SUPABASE_DB_URL doit être locale");
 
 const db = createClient(url, key, { auth: { persistSession: false } });
 const PASSWORD = "Demo-LoyerCI-2026!";
@@ -143,6 +148,58 @@ async function main() {
       p_ua: "seed",
     }),
     "RIB",
+  );
+
+  console.log("→ Comptes Mobile Money du bailleur (paiement direct)");
+  // Ajout par la fonction métier (journalisé), donc soumis à la carence de 48 h...
+  for (const a of [
+    { p_kind: "mobile_money", p_operator: "orange", p_msisdn: "2250707000111" },
+    { p_kind: "mobile_money", p_operator: "wave", p_msisdn: "2250505000333" },
+  ] as const) {
+    await must(
+      db.rpc("add_payout_account", {
+        p_actor: owner,
+        p_org: orgId,
+        p_holder: "AKWABA IMMOBILIER SARL",
+        p_bank: null,
+        p_iban: null,
+        p_ip: "127.0.0.1",
+        p_ua: "seed",
+        ...a,
+      }),
+      `compte ${a.p_operator}`,
+    );
+  }
+  // ...puis, DÉMO LOCALE UNIQUEMENT, carence réputée écoulée et nom attendu renseigné, par une
+  // connexion superutilisateur à la base locale : impossible via l'API (même service_role ne
+  // peut pas écrire directement dans payout_accounts).
+  const sql = postgres(localDbUrl, { max: 1, onnotice: () => {} });
+  try {
+    await sql.begin(async (tx) => {
+      await tx`set local session_replication_role = replica`; // contourne le trigger d'immuabilité (démo)
+      await tx`update public.payout_accounts
+                  set activates_at = now() - interval '49 hours', display_name_expected = 'AKWABA IMMOBILIER'
+                where org_id = ${orgId} and kind = 'mobile_money'`;
+      await tx`insert into public.payout_accounts (org_id, kind, account_holder, pispi_alias, display_name_expected, activates_at, created_by)
+               values (${orgId}, 'pispi_alias', 'AKWABA IMMOBILIER SARL', '+2250707000111', 'AKWABA IMMOBILIER',
+                       now() - interval '49 hours', ${owner})`;
+    });
+  } finally {
+    await sql.end();
+  }
+  await must(
+    db.rpc("set_payment_settings", {
+      p_actor: owner,
+      p_org: orgId,
+      p_direct: true,
+      p_cinetpay: false,
+      p_transfer: true,
+      p_fees_notice: "Les frais de transfert éventuels sont à votre charge, selon la grille en vigueur de votre opérateur.",
+      p_cash_threshold: 100000,
+      p_ip: "127.0.0.1",
+      p_ua: "seed",
+    }),
+    "paramètres de paiement",
   );
 
   console.log("→ Avis d'échéance (mois précédent + mois courant)");

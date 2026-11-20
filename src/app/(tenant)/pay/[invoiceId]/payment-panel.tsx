@@ -1,6 +1,6 @@
 "use client";
 import { useActionState, useState, useTransition } from "react";
-import { Building, Check, Copy, Lock, Smartphone, Upload, X } from "lucide-react";
+import { Building, Lock, Smartphone, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,14 +8,9 @@ import { formatXOF, groupIban } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { MobileOperator } from "@/lib/validation/schemas";
 import { initiateMobileMoneyPayment, submitTransferProof, type ProofState } from "./actions";
-
-/* Pastilles aux couleurs des opérateurs (pas de logos déposés). */
-const OPERATORS: { id: MobileOperator; name: string; hint: string; swatch: string }[] = [
-  { id: "orange", name: "Orange Money", hint: "07 …", swatch: "bg-[#ff7900] text-white" },
-  { id: "mtn", name: "MTN MoMo", hint: "05 …", swatch: "bg-[#ffcc00] text-[#1d1d1b]" },
-  { id: "wave", name: "Wave", hint: "Tous réseaux", swatch: "bg-[#1dc8ff] text-[#0b1b4d]" },
-  { id: "moov", name: "Moov Money", hint: "01 …", swatch: "bg-[#0055a4] text-white" },
-];
+import { CopyField } from "./copy-field";
+import { DirectPayment, type DirectInfo } from "./direct-payment";
+import { OPERATORS } from "./operators";
 
 export interface TransferInfo {
   accountHolder: string;
@@ -24,41 +19,81 @@ export interface TransferInfo {
   reference: string;
 }
 
-export function PaymentPanel({ invoiceId, remaining, transfer }: { invoiceId: string; remaining: number; transfer: TransferInfo | null }) {
-  const [tab, setTab] = useState<"mobile" | "virement">("mobile");
+export interface PanelProps {
+  invoiceId: string;
+  remaining: number;
+  /** null : virement désactivé par le bailleur. undefined : activé mais aucun RIB effectif. */
+  transfer: TransferInfo | null | undefined;
+  /** null : paiement direct désactivé ou aucun compte de réception effectif. */
+  direct: DirectInfo | null;
+  /** Bouton CinetPay rendu UNIQUEMENT si le bailleur l'a activé et que le serveur est configuré. */
+  cinetpay: boolean;
+  ussd: Partial<Record<MobileOperator, string>>;
+  refExamples: Partial<Record<MobileOperator, string>>;
+}
+
+export function PaymentPanel(props: PanelProps) {
+  const { invoiceId, remaining, transfer, direct, cinetpay } = props;
+  const tabs = [
+    ...(direct || cinetpay ? [{ id: "mobile" as const, label: "Mobile Money", icon: Smartphone }] : []),
+    ...(transfer !== null ? [{ id: "virement" as const, label: "Virement bancaire", icon: Building }] : []),
+  ];
+  const [tab, setTab] = useState<"mobile" | "virement">(tabs[0]?.id ?? "mobile");
+
+  if (tabs.length === 0) {
+    return (
+      <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
+        Aucun mode de paiement en ligne n&apos;est encore configuré par votre bailleur.
+      </p>
+    );
+  }
+
   return (
     <div className="grid gap-4">
-      <div role="tablist" aria-label="Mode de paiement" className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
-        {(
-          [
-            { id: "mobile", label: "Mobile Money", icon: Smartphone },
-            { id: "virement", label: "Virement bancaire", icon: Building },
-          ] as const
-        ).map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            role="tab"
-            aria-selected={tab === id}
-            onClick={() => setTab(id)}
-            className={cn(
-              "flex h-10 items-center justify-center gap-2 rounded-md text-sm font-medium transition",
-              tab === id ? "bg-card shadow-sm" : "text-muted-foreground",
-            )}
-          >
-            <Icon className="size-4" aria-hidden />
-            {label}
-          </button>
-        ))}
-      </div>
+      {tabs.length > 1 && (
+        <div role="tablist" aria-label="Mode de paiement" className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+          {tabs.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={cn(
+                "flex h-10 items-center justify-center gap-2 rounded-md text-sm font-medium transition",
+                tab === id ? "bg-card shadow-sm" : "text-muted-foreground",
+              )}
+            >
+              <Icon className="size-4" aria-hidden />
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       {tab === "mobile" ? (
-        <MobileMoney invoiceId={invoiceId} remaining={remaining} />
+        <div className="grid gap-4">
+          {direct && (
+            <DirectPayment invoiceId={invoiceId} remaining={remaining} info={direct} ussd={props.ussd} refExamples={props.refExamples} />
+          )}
+          {cinetpay &&
+            (direct ? (
+              <details className="rounded-lg border p-3">
+                <summary className="cursor-pointer text-sm font-medium">Ou payer en ligne via CinetPay (confirmation immédiate)</summary>
+                <div className="mt-3">
+                  <MobileMoney invoiceId={invoiceId} remaining={remaining} />
+                </div>
+              </details>
+            ) : (
+              <MobileMoney invoiceId={invoiceId} remaining={remaining} />
+            ))}
+        </div>
       ) : (
-        <BankTransfer invoiceId={invoiceId} remaining={remaining} transfer={transfer} />
+        <BankTransfer invoiceId={invoiceId} remaining={remaining} transfer={transfer ?? null} />
       )}
     </div>
   );
 }
 
+/** Paiement via l'agrégateur CinetPay (module optionnel, désactivé par défaut). */
 function MobileMoney({ invoiceId, remaining }: { invoiceId: string; remaining: number }) {
   const [operator, setOperator] = useState<MobileOperator | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,31 +151,6 @@ function MobileMoney({ invoiceId, remaining }: { invoiceId: string; remaining: n
           {error}
         </p>
       )}
-    </div>
-  );
-}
-
-function CopyField({ label, value, display, emphasize }: { label: string; value: string; display?: string; emphasize?: boolean }) {
-  const [copied, setCopied] = useState<"ok" | "ko" | null>(null);
-  const copy = () => {
-    // Le presse-papier peut être refusé (contexte non sécurisé, permission) : on le signale.
-    navigator.clipboard
-      .writeText(value)
-      .then(
-        () => setCopied("ok"),
-        () => setCopied("ko"),
-      )
-      .finally(() => setTimeout(() => setCopied(null), 1500));
-  };
-  return (
-    <div className={cn("flex items-center justify-between gap-3 rounded-lg border p-3", emphasize && "border-accent bg-accent/8")}>
-      <div className="min-w-0">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={cn("break-words font-mono text-[13px] sm:text-sm", emphasize && "text-base font-semibold")}>{display ?? value}</p>
-      </div>
-      <Button type="button" size="icon" variant="ghost" aria-label={`Copier ${label}`} onClick={copy}>
-        {copied === "ok" ? <Check className="text-success" /> : copied === "ko" ? <X className="text-danger" /> : <Copy />}
-      </Button>
     </div>
   );
 }

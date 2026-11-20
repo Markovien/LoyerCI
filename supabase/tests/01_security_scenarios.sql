@@ -742,6 +742,11 @@ begin
     assert sqlerrm like '%déjà été déclaré%', 'message inattendu : ' || sqlerrm;
   end;
 
+  begin -- même transaction redéclarée pour un AUTRE opérateur (constat e2e P1.3)
+    perform public.submit_direct_payment(v_kouassi, v_inv, 'wave', 1000, 'MP261119.0001', null, null, null, null);
+    raise exception 'ÉCHEC : n° de transaction réutilisé sous un autre opérateur';
+  exception when raise_exception then null;
+  end;
   p2 := public.submit_direct_payment(v_kouassi, v_inv, 'wave', 150000, 'T26111900002', null, null, null, null);
   p3 := public.submit_direct_payment(v_kouassi, v_inv, 'orange', 100000, 'MP261119.0003', null, null, null, null);
   begin
@@ -749,7 +754,7 @@ begin
     raise exception 'ÉCHEC : 4e déclaration en attente acceptée';
   exception when raise_exception then null;
   end;
-  raise notice 'OK  P1.2 déclaration : appartenance, montant, format, chemin, unicité inter-locataires, 3 en attente max, aucune imputation';
+  raise notice 'OK  P1.2 déclaration : appartenance, montant, format, chemin, unicité inter-locataires et inter-opérateurs, 3 en attente max, aucune imputation';
 
   -- Validation
   begin

@@ -5,6 +5,17 @@ import { z } from "zod";
  * Variables d'environnement SERVEUR, validées au premier accès (et non au build).
  * Toute variable manquante fait échouer bruyamment au lieu de dégrader la sécurité.
  */
+const ussdCodes = z.partialRecord(z.enum(["orange", "mtn", "moov", "wave"]), z.string().regex(/^[*#0-9]{3,20}$/));
+export type UssdCodes = z.infer<typeof ussdCodes>;
+
+function safeJson(v: string): unknown {
+  try {
+    return JSON.parse(v);
+  } catch {
+    return null;
+  }
+}
+
 const serverSchema = z
   .object({
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
@@ -20,6 +31,18 @@ const serverSchema = z
       .regex(/^\d{4,12}$/)
       .optional(),
     CINETPAY_SECRET_KEY: z.string().min(16).optional(),
+    // Raccourcis USSD (P1.3) : désactivés tant que le pilote ne les a pas validés sur de
+    // vrais appareils. Ex. {"orange":"#144#"} ; aucun code n'est figé dans le code source.
+    USSD_CODES_JSON: z
+      .string()
+      .optional()
+      .transform((v, ctx): UssdCodes => {
+        if (!v) return {};
+        const parsed = ussdCodes.safeParse(safeJson(v));
+        if (parsed.success) return parsed.data;
+        ctx.addIssue({ code: "custom", message: "USSD_CODES_JSON invalide" });
+        return z.NEVER;
+      }),
   })
   .refine(
     (e) =>

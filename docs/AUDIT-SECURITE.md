@@ -70,6 +70,10 @@ Chaque faille a été **démontrée** avant correction, puis le PoC a été rejo
 - **Problème :** dans `config.toml`, `[auth.email] enable_signup` désactive le **fournisseur e-mail** entier (« Email logins are disabled »), pas seulement les inscriptions ; et l'action de connexion ignorait silencieusement l'erreur.
 - **Correctif :** inscription fermée par `[auth] enable_signup = false` ; fournisseur e-mail conservé ; erreurs d'Auth journalisées côté serveur (sans e-mail).
 
+### 🟡 M7 — N° de transaction réutilisable en changeant d'opérateur (constaté en P1.3 par un test e2e)
+- **Problème :** l'unicité prévue par la feuille de route portait sur le couple (opérateur, n° de transaction). Une transaction déjà déclarée pour Orange Money était acceptée si on la redéclarait pour Wave.
+- **Correctif :** unicité **globale** sur les paiements directs, insensible à la casse (migration `20261120000100`). Plus strict que la spécification initiale. Faux positifs jugés négligeables.
+
 ### 🟢 Faibles (corrigées)
 | # | Constat | Correctif |
 |---|---|---|
@@ -103,7 +107,7 @@ Chaque faille a été **démontrée** avant correction, puis le PoC a été rejo
 | 🟠 Élevée (avant ouverture de P1) | **Ajout de coordonnées de réception sans ré-authentification ni alerte** : la carence ne protège que si le bailleur est **prévenu** pendant les 48 h | P1.6 (OTP < 5 min, alertes e-mail/SMS, annulation en un clic) — à livrer **avant** d'activer le paiement direct en production |
 | 🟡 Moyenne | **Suppression des derniers maillons d'audit** indétectable depuis la base (PoC 6) | P4.4 : export de `private.audit_chain_head()` (ajoutée) vers un stockage WORM externe |
 | 🟡 Moyenne | **Vérification quotidienne de la chaîne sans alerte** : le résultat de `pg_cron` n'est lu par personne | P4.4 / P4.5 |
-| 🟡 Moyenne | **Preuves de paiement** : métadonnées EXIF (dont **GPS**) conservées ; filtre PDF heuristique | Proposé en P1.3 : ré-encodage des images côté serveur (suppression des métadonnées), et rendu des PDF hors du contexte applicatif |
+| 🟢 Faible (résiduel) | **Preuves de paiement** : filtre PDF heuristique. ~~Métadonnées EXIF/GPS conservées~~ → **corrigé en P1.3** (retrait des blocs EXIF/XMP/IPTC des JPEG et des blocs texte des PNG, sans décodage) | Rendu des PDF hors du contexte applicatif (P4.7) |
 | 🟢 Faible | `webhook_events.payload` conserve le numéro de téléphone payeur | P4.3 (purge à 90 jours) |
 | 🟢 Faible | Le locataire peut lire les UUID `declared_by`/`validated_by` de ses paiements | P0.2 (vue dédiée) |
 | 🟢 Faible | Verrou consultatif global sur l'audit : sérialise toutes les écritures sensibles | Acceptable au volume du pilote ; à mesurer en P4.5 |

@@ -9,13 +9,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
 import { formatDate, formatPeriod, formatXOF } from "@/lib/format";
 import { uuid } from "@/lib/validation/schemas";
+import { serverEnv } from "@/lib/env";
+import { isProviderConfigured } from "@/lib/payments/registry";
+import type { DirectInfo } from "./direct-payment";
 import { PaymentPanel, type TransferInfo } from "./payment-panel";
 
 export const metadata: Metadata = { title: "Payer mon loyer", robots: { index: false } };
 
 const PAYMENT_STATUS: Record<string, string> = {
   initie: "En cours",
-  en_attente_validation: "En attente de validation",
+  en_attente_validation: "En attente de confirmation du bailleur",
   reussi: "Reçu",
   echoue: "Échoué",
   rejete: "Rejeté",
@@ -40,13 +43,42 @@ export default async function PayPage({ params }: { params: Promise<{ invoiceId:
   const remaining = inv.amount_due - inv.amount_paid;
   const payable = inv.status !== "paye" && inv.status !== "annule" && remaining > 0;
 
-  const [{ data: receipt }, { data: tr }] = await Promise.all([
+  // Lectures RLS / fonctions réservées au locataire de l'avis (aucune donnée d'un autre bailleur).
+  const [{ data: receipt }, { data: settings }, { data: tr }, { data: directRows }, { data: formats }] = await Promise.all([
     supabase.from("receipts").select("id, receipt_number").eq("invoice_id", inv.id).maybeSingle(),
+    supabase
+      .from("org_payment_settings")
+      .select("direct_enabled, cinetpay_enabled, transfer_enabled, fees_notice")
+      .eq("org_id", inv.org_id)
+      .maybeSingle(),
     payable ? supabase.rpc("get_transfer_instructions", { p_invoice: inv.id }).maybeSingle() : Promise.resolve({ data: null }),
+    payable ? supabase.rpc("get_direct_payment_instructions", { p_invoice: inv.id }) : Promise.resolve({ data: null }),
+    supabase.from("operator_ref_formats").select("operator, example"),
   ]);
-  const transfer: TransferInfo | null = tr
-    ? { accountHolder: tr.account_holder, bankName: tr.bank_name, iban: tr.iban, reference: tr.payment_reference }
-    : null;
+
+  const transfer: TransferInfo | null | undefined =
+    settings?.transfer_enabled === false
+      ? null
+      : tr
+        ? { accountHolder: tr.account_holder, bankName: tr.bank_name, iban: tr.iban, reference: tr.payment_reference }
+        : undefined;
+  const direct: DirectInfo | null =
+    directRows && directRows.length > 0
+      ? {
+          reference: directRows[0]!.payment_reference,
+          feesNotice: directRows[0]!.fees_notice,
+          accounts: directRows.map((a) => ({
+            kind: a.kind as DirectInfo["accounts"][number]["kind"],
+            operator: a.operator,
+            msisdn: a.msisdn,
+            pispiAlias: a.pispi_alias,
+            linkUrl: a.payment_link_url,
+            displayName: a.display_name,
+          })),
+        }
+      : null;
+  const cinetpay = settings?.cinetpay_enabled === true && isProviderConfigured("cinetpay");
+  const refExamples = Object.fromEntries((formats ?? []).filter((f) => f.example).map((f) => [f.operator, f.example!]));
   const p = inv.leases?.properties;
   const history = [...inv.payments].sort((a, b) => b.created_at.localeCompare(a.created_at)).filter((x) => x.status !== "initie");
 
@@ -88,7 +120,15 @@ export default async function PayPage({ params }: { params: Promise<{ invoiceId:
         </CardHeader>
         <CardContent>
           {payable ? (
-            <PaymentPanel invoiceId={inv.id} remaining={remaining} transfer={transfer} />
+            <PaymentPanel
+              invoiceId={inv.id}
+              remaining={remaining}
+              transfer={transfer}
+              direct={direct}
+              cinetpay={cinetpay}
+              ussd={serverEnv().USSD_CODES_JSON}
+              refExamples={refExamples}
+            />
           ) : receipt ? (
             <div className="grid gap-3 rounded-lg bg-success/8 p-4">
               <p className="flex items-center gap-2 font-medium text-success">

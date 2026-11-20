@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { admin, nextPeriod, ownerState, tenantState } from "./helpers";
+import { admin, ownerState, payableInvoice, tenantState } from "./helpers";
 
 /** PDF minimal sans contenu actif (accepté par sniffProof / pdfLooksActive). */
 const PROOF_PDF = Buffer.from(
@@ -12,28 +12,7 @@ let invoiceId = "";
 let reference = "";
 
 test.beforeAll(async () => {
-  // Avis de Kouassi Jean-Marc non soldé sur un mois futur (indépendant de l'état du seed).
-  const db = admin();
-  const { data: tenant } = await db.from("tenants").select("id").eq("full_name", "Kouassi Jean-Marc").single();
-  for (let k = 1; k <= 24 && !invoiceId; k++) {
-    const period = nextPeriod(k);
-    await db.rpc("generate_monthly_invoices", { p_period: period });
-    const { data: inv } = await db
-      .from("invoices")
-      .select("id, status, payment_reference")
-      .eq("tenant_id", tenant!.id)
-      .eq("period", period)
-      .single();
-    if (inv && inv.status !== "paye" && inv.status !== "annule") {
-      const { count } = await db
-        .from("payments")
-        .select("id", { count: "exact", head: true })
-        .eq("invoice_id", inv.id)
-        .eq("status", "en_attente_validation");
-      if (!count) ({ id: invoiceId, payment_reference: reference } = inv);
-    }
-  }
-  expect(invoiceId, "aucun avis payable trouvé").not.toBe("");
+  ({ id: invoiceId, reference } = await payableInvoice("Kouassi Jean-Marc"));
 });
 
 test.describe("anonyme", () => {

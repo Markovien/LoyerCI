@@ -49,3 +49,30 @@ export function nextPeriod(offsetMonths = 1) {
   d.setUTCMonth(d.getUTCMonth() + offsetMonths);
   return d.toISOString().slice(0, 10);
 }
+
+/**
+ * Avis futur non soldé et sans déclaration en attente pour le locataire donné
+ * (indépendant de l'état du seed et des exécutions précédentes).
+ */
+export async function payableInvoice(tenantName: string): Promise<{ id: string; reference: string; amount: number }> {
+  const db = admin();
+  const { data: tenant } = await db.from("tenants").select("id").eq("full_name", tenantName).single();
+  for (let k = 1; k <= 36; k++) {
+    const period = nextPeriod(k);
+    await db.rpc("generate_monthly_invoices", { p_period: period });
+    const { data: inv } = await db
+      .from("invoices")
+      .select("id, status, payment_reference, amount_due, amount_paid")
+      .eq("tenant_id", tenant!.id)
+      .eq("period", period)
+      .single();
+    if (!inv || inv.status === "paye" || inv.status === "annule" || inv.amount_paid > 0) continue;
+    const { count } = await db
+      .from("payments")
+      .select("id", { count: "exact", head: true })
+      .eq("invoice_id", inv.id)
+      .neq("status", "echoue");
+    if (!count) return { id: inv.id, reference: inv.payment_reference, amount: inv.amount_due - inv.amount_paid };
+  }
+  throw new Error("aucun avis payable trouvé");
+}
