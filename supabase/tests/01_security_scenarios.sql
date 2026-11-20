@@ -865,4 +865,37 @@ do $$ begin
   raise notice 'OK  P1.2 paramètres : propriétaire seul, au moins un mode actif, désactivation effective, avant/après tracés';
 end $$;
 
+
+-- =============================================================================
+-- P1.4 — Numéro du payeur : jamais lisible en clair côté client
+-- =============================================================================
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000001';
+do $$
+declare ok boolean := false;
+begin
+  begin
+    perform payer_msisdn from public.payments limit 1;
+  exception when insufficient_privilege then ok := true;
+  end;
+  assert ok, 'le propriétaire lit le numéro payeur en clair via l''API';
+  assert exists (select 1 from public.payments where payer_msisdn_hint = '•••• 3456'), 'indice du numéro payeur attendu';
+  raise notice 'OK  P1.4 numéro payeur : illisible en clair (privilège de colonne), indice des 4 derniers chiffres seulement';
+end $$;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000002';
+do $$
+declare ok boolean := false;
+begin
+  begin
+    perform payer_msisdn from public.payments limit 1;
+  exception when insufficient_privilege then ok := true;
+  end;
+  assert ok, 'le gestionnaire lit le numéro payeur en clair';
+end $$;
+reset role;
+do $$ begin
+  assert not has_column_privilege('authenticated', 'public.payments', 'payer_msisdn', 'select'), 'privilège de colonne';
+  assert not has_column_privilege('anon', 'public.payments', 'payer_msisdn_hint', 'select'), 'anon';
+end $$;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

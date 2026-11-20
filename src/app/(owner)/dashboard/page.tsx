@@ -5,10 +5,10 @@ import { Brand } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { requireOrgMember } from "@/lib/auth/session";
 import { currentPeriod, formatPeriod } from "@/lib/format";
-import type { DashboardKpis, PendingTransferRow } from "@/types/database";
+import type { DashboardKpis } from "@/types/database";
 import { KpiGrid } from "./_components/kpi-grid";
 import { InvoiceList } from "./_components/invoice-list";
-import { PendingTransfers } from "./_components/pending-transfers";
+import { PendingPayments, type PendingPaymentView } from "./_components/pending-payments";
 import { RealtimeRefresh } from "./_components/realtime-refresh";
 
 export const metadata: Metadata = { title: "Tableau de bord" };
@@ -39,7 +39,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
   // Lectures avec le JWT de l'utilisateur : la RLS garantit le cloisonnement.
-  const [kpis, invoices, transfers] = await Promise.all([
+  const [kpis, invoices, pending] = await Promise.all([
     supabase.rpc("dashboard_kpis", { p_org: orgId, p_month: period }).single(),
     supabase
       .from("invoices")
@@ -53,13 +53,37 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       ? supabase
           .from("payments")
           .select(
-            "id, amount, bank_reference, created_at, invoices(payment_reference, period, amount_due, amount_paid, tenants(full_name))",
+            "id, method, provider, operator, amount, bank_reference, operator_txn_ref, payer_msisdn_hint, proof_path, declared_by, created_at, invoices(payment_reference, period, tenants(full_name))",
           )
           .eq("org_id", orgId)
           .eq("status", "en_attente_validation")
           .order("created_at")
-      : Promise.resolve({ data: [] as PendingTransferRow[] }),
+      : Promise.resolve({ data: [] }),
   ]);
+
+  // Vue minimale pour le composant client : aucun chemin de fichier, aucun numéro complet.
+  const rawPending = pending.data ?? [];
+  const memberIds = [...new Set(rawPending.filter((p) => p.method === "especes" && p.declared_by).map((p) => p.declared_by!))];
+  const { data: members } = memberIds.length
+    ? await supabase.from("profiles").select("id, full_name").in("id", memberIds)
+    : { data: [] as { id: string; full_name: string }[] };
+  const now = Date.now();
+  const pendingRows: PendingPaymentView[] = rawPending.map((p) => ({
+    id: p.id,
+    kind: p.method === "virement" ? "virement" : p.method === "especes" ? "especes" : "direct",
+    operator: p.operator,
+    amount: p.amount,
+    createdAt: p.created_at,
+    overdue: now - new Date(p.created_at).getTime() > 48 * 3600_000,
+    hasProof: p.proof_path !== null,
+    bankReference: p.bank_reference,
+    operatorTxnRef: p.operator_txn_ref,
+    payerHint: p.payer_msisdn_hint,
+    declaredByMember: p.method === "especes" ? (members?.find((m) => m.id === p.declared_by)?.full_name ?? "Membre de l'agence") : null,
+    tenantName: p.invoices?.tenants?.full_name ?? "Locataire",
+    invoiceReference: p.invoices?.payment_reference ?? "",
+    period: p.invoices?.period ?? "",
+  }));
 
   const orgName = membership.organizations?.name ?? "Mon organisation";
   const roleLabel = { owner: "Propriétaire", manager: "Gestionnaire", accountant: "Comptable" }[membership.role];
@@ -100,7 +124,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
       <KpiGrid k={kpis.data ?? EMPTY_KPIS} />
 
-      {canValidate && <PendingTransfers rows={transfers.data ?? []} />}
+      {canValidate && <PendingPayments rows={pendingRows} role={membership.role} />}
 
       <InvoiceList rows={invoices.data ?? []} period={period} appUrl={appUrl} landlordName={orgName} canRecordCash={canValidate} />
 

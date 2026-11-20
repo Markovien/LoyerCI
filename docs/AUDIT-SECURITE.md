@@ -74,6 +74,10 @@ Chaque faille a été **démontrée** avant correction, puis le PoC a été rejo
 - **Problème :** l'unicité prévue par la feuille de route portait sur le couple (opérateur, n° de transaction). Une transaction déjà déclarée pour Orange Money était acceptée si on la redéclarait pour Wave.
 - **Correctif :** unicité **globale** sur les paiements directs, insensible à la casse (migration `20261120000100`). Plus strict que la spécification initiale. Faux positifs jugés négligeables.
 
+### 🟡 M8 — Numéro du payeur lisible en clair par tout membre via l'API (anticipé en P1.4)
+- **Problème :** masquer le numéro à l'affichage ne suffisait pas : la RLS laisse tout membre de l'organisation, gestionnaire compris, lire `payments` avec son jeton, donc le numéro complet.
+- **Correctif :** privilège de colonne. `payer_msisdn` est illisible pour `authenticated` ; seul `payer_msisdn_hint` (4 derniers chiffres) l'est. Vérifié aussi sur Realtime, qui retire la colonne des événements. Toute future colonne de `payments` est illisible par défaut.
+
 ### 🟢 Faibles (corrigées)
 | # | Constat | Correctif |
 |---|---|---|

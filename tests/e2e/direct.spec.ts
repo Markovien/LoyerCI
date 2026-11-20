@@ -37,7 +37,7 @@ test.describe("locataire : paiement direct (P1.3)", () => {
     await page.screenshot({ path: "test-results/captures/locataire-direct-390.png", fullPage: true });
 
     await page.fill("#txnRef", txnRef);
-    await page.fill("#payerPhone", "07 07 12 34 56");
+    await page.fill("#payerPhone", "01 01 99 88 77"); // ≠ téléphone du locataire
     await page.getByRole("button", { name: /Déclarer mon paiement/ }).click();
     await expect(page.getByRole("status")).toContainText("Déclaration envoyée");
     await page.reload();
@@ -48,7 +48,7 @@ test.describe("locataire : paiement direct (P1.3)", () => {
       .select("status, provider, operator, payer_msisdn")
       .eq("operator_txn_ref", txnRef)
       .single();
-    expect(pay).toMatchObject({ status: "en_attente_validation", provider: "direct", operator: "orange", payer_msisdn: "2250707123456" });
+    expect(pay).toMatchObject({ status: "en_attente_validation", provider: "direct", operator: "orange", payer_msisdn: "2250101998877" });
     const { count } = await admin().from("receipts").select("id", { count: "exact", head: true }).eq("invoice_id", invoice.id);
     expect(count).toBe(0); // une déclaration seule n'émet jamais de quittance
   });
@@ -77,10 +77,28 @@ test.describe("propriétaire : confirmation du paiement direct", () => {
 
   test("la confirmation solde l'avis et émet une quittance", async ({ page }, info) => {
     test.skip(info.project.name !== "mobile", "une seule fois");
-    await page.goto("/dashboard");
-    const row = page.locator("div.rounded-lg.border.p-3", { hasText: invoice.reference }).first();
+    // Déclaration vieillie de 49 h (base locale) : la carte doit la signaler.
+    await admin()
+      .from("payments")
+      .update({ created_at: new Date(Date.now() - 49 * 3600_000).toISOString() })
+      .eq("operator_txn_ref", txnRef);
+    const res = await page.goto("/dashboard");
+    const html = await res!.text();
+    expect(html).not.toMatch(/0101998877|01 01 99 88 77/); // numéro payeur jamais envoyé en clair au navigateur
+    expect(html).not.toContain("transfer-proofs");
+
+    const row = page.getByTestId("pending-payment").filter({ hasText: invoice.reference }).first();
     await expect(row).toBeVisible();
-    await row.getByRole("button", { name: "Valider" }).click();
+    await expect(row).toContainText(txnRef);
+    await expect(row).toContainText("•••• 8877");
+    await expect(row).toContainText("plus de 48 h");
+    await expect(page.getByText(/en attente depuis plus de 48 h/)).toBeVisible();
+    await page.screenshot({ path: "test-results/captures/proprietaire-paiements-a-confirmer-390.png", fullPage: true });
+
+    await row.getByRole("button", { name: "Confirmer", exact: true }).click();
+    // Le message survit à la disparition de la ligne (rafraîchissement temps réel).
+    await expect(page.getByRole("status").filter({ hasText: "Paiement confirmé" })).toBeVisible();
+    await expect(row).toHaveCount(0);
     await expect
       .poll(async () => (await admin().from("invoices").select("status").eq("id", invoice.id).single()).data?.status)
       .toBe("paye");

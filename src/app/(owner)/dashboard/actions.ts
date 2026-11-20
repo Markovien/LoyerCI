@@ -4,7 +4,7 @@ import { getActionUser } from "@/lib/auth/session";
 import { dbErrorMessage, supabaseAdmin } from "@/lib/supabase/admin";
 import { requestContext } from "@/lib/security/request-context";
 import { limit } from "@/lib/security/rate-limit";
-import { cashPaymentSchema, reviewTransferSchema, uuid } from "@/lib/validation/schemas";
+import { cashPaymentSchema, reviewManualPaymentSchema, uuid } from "@/lib/validation/schemas";
 
 export type ActionResult = { ok: boolean; message: string; url?: string };
 
@@ -22,10 +22,10 @@ async function guard(bucket: string, max = 20) {
   return { user, ctx: await requestContext() };
 }
 
-export async function reviewTransfer(input: unknown): Promise<ActionResult> {
+export async function reviewManualPayment(input: unknown): Promise<ActionResult> {
   const g = await guard("review");
   if ("error" in g) return g.error!;
-  const parsed = reviewTransferSchema.safeParse(input);
+  const parsed = reviewManualPaymentSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Saisie invalide" };
 
   // Fonction unifiée (P1.2) : virements, paiements directs et espèces en attente.

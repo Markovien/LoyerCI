@@ -377,6 +377,7 @@ export type Database = {
           operator_txn_ref: string | null;
           org_id: string;
           payer_msisdn: string | null;
+          payer_msisdn_hint: string | null;
           proof_path: string | null;
           provider: Database["public"]["Enums"]["payment_provider"];
           provider_transaction_id: string;
@@ -401,6 +402,7 @@ export type Database = {
           operator_txn_ref?: string | null;
           org_id: string;
           payer_msisdn?: string | null;
+          payer_msisdn_hint?: never;
           proof_path?: string | null;
           provider: Database["public"]["Enums"]["payment_provider"];
           provider_transaction_id: string;
@@ -424,6 +426,7 @@ export type Database = {
           operator_txn_ref?: string | null;
           org_id?: string;
           payer_msisdn?: string | null;
+          payer_msisdn_hint?: never;
           proof_path?: string | null;
           provider?: Database["public"]["Enums"]["payment_provider"];
           provider_transaction_id?: string;

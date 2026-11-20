@@ -1,11 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Page } from "@playwright/test";
+import type { Database } from "../../src/types/db";
 
 export const MAILPIT = process.env.MAILPIT_URL ?? "http://127.0.0.1:54324";
 export const OWNER = "adjoua.coulibaly@akwaba-immo.ci";
 export const TENANT = "jm.kouassi@exemple.ci";
 export const ownerState = "test-results/.auth/owner.json";
 export const tenantState = "test-results/.auth/tenant.json";
+export const ACCOUNTANT = "compta@akwaba-immo.ci";
+export const accountantState = "test-results/.auth/accountant.json";
 
 /** Client service_role LOCAL pour préparer les données de test (jamais en production). */
 export function admin() {
@@ -13,7 +16,7 @@ export function admin() {
   if (!["127.0.0.1", "localhost"].includes(new URL(url).hostname)) throw new Error("e2e : Supabase local uniquement");
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY manquant");
-  return createClient(url, key, { auth: { persistSession: false } });
+  return createClient<Database>(url, key, { auth: { persistSession: false } });
 }
 
 interface MailpitList {

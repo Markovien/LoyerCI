@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { formatPeriod, formatVerificationCode, formatXOF, formatXOFPlain } from "@/lib/format";
 import { amountInWords } from "@/lib/number-to-words";
 import { buildDueNoticeText, whatsappLink } from "@/lib/whatsapp";
-import { ibanCI, loginSchema, phoneCI, reviewTransferSchema } from "@/lib/validation/schemas";
+import { ibanCI, loginSchema, phoneCI, reviewManualPaymentSchema } from "@/lib/validation/schemas";
 import { clientIpFrom } from "@/lib/security/request-context";
 import { pdfLooksActive, sniffProof } from "@/lib/security/files";
 
@@ -36,8 +36,10 @@ describe("validation des entrées (Zod)", () => {
   });
   it("exige un motif pour rejeter un virement", () => {
     const id = "6f1c1a8e-3b5d-4c2e-9f00-1a2b3c4d5e6f";
-    expect(reviewTransferSchema.safeParse({ paymentId: id, decision: "rejeter" }).success).toBe(false);
-    expect(reviewTransferSchema.safeParse({ paymentId: id, decision: "rejeter", reason: "Montant absent du relevé" }).success).toBe(true);
+    expect(reviewManualPaymentSchema.safeParse({ paymentId: id, decision: "rejeter" }).success).toBe(false);
+    expect(reviewManualPaymentSchema.safeParse({ paymentId: id, decision: "rejeter", reason: "Montant absent du relevé" }).success).toBe(
+      true,
+    );
   });
   it("bloque les redirections ouvertes après connexion", () => {
     expect(loginSchema.parse({ email: "a@b.ci", next: "//evil.example" }).next).toBe("/dashboard");

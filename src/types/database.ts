@@ -34,20 +34,6 @@ export interface InvoiceRow {
   leases: { properties: { code: string; label: string; commune: string; quartier: string | null; type: PropertyType } | null } | null;
 }
 
-export interface PendingTransferRow {
-  id: string;
-  amount: number;
-  bank_reference: string | null;
-  created_at: string;
-  invoices: {
-    payment_reference: string;
-    period: string;
-    amount_due: number;
-    amount_paid: number;
-    tenants: { full_name: string } | null;
-  } | null;
-}
-
 export interface TenantInvoiceRow {
   id: string;
   org_id: string;

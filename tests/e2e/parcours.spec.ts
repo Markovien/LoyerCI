@@ -69,9 +69,9 @@ test.describe("propriétaire", () => {
 
   test("valide le virement déclaré : l'avis est soldé et une quittance est émise", async ({ page }) => {
     await page.goto("/dashboard");
-    const row = page.locator("div.rounded-lg.border.p-3", { hasText: reference }).filter({ hasText: "E2E-VIR-001" });
+    const row = page.getByTestId("pending-payment").filter({ hasText: reference }).filter({ hasText: "E2E-VIR-001" });
     await expect(row).toBeVisible();
-    await row.getByRole("button", { name: "Valider" }).click();
+    await row.getByRole("button", { name: "Confirmer", exact: true }).click();
     await expect.poll(async () => (await admin().from("invoices").select("status").eq("id", invoiceId).single()).data?.status).toBe("paye");
     const { count } = await admin().from("receipts").select("id", { count: "exact", head: true }).eq("invoice_id", invoiceId);
     expect(count).toBe(1);

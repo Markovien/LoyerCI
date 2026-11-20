@@ -49,7 +49,8 @@ export const transferProofSchema = z.object({
     .transform((v) => (v ? v : undefined)),
 });
 
-export const reviewTransferSchema = z
+/** Confirmation ou rejet d'un paiement manuel (virement, paiement direct, espèces). */
+export const reviewManualPaymentSchema = z
   .object({
     paymentId: uuid,
     decision: z.enum(["valider", "rejeter"]),
