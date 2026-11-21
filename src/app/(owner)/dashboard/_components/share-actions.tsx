@@ -90,6 +90,9 @@ export function ShareActions({
 }
 
 type Mode = "especes" | "mobile_money" | "virement";
+
+/** Valeur texte d'un champ de formulaire (un champ fichier renverrait un File). */
+const text = (v: FormDataEntryValue | null) => (typeof v === "string" ? v : "");
 type Result = { ok: boolean; message: string };
 
 const MODES: { id: Mode; label: string }[] = [
@@ -137,8 +140,8 @@ function ReceiptForm({
             method: mode,
             operator: operator ?? undefined,
             amount,
-            txnRef: String(f.get("txnRef") ?? ""),
-            bankReference: String(f.get("bankReference") ?? ""),
+            txnRef: text(f.get("txnRef")),
+            bankReference: text(f.get("bankReference")),
           }),
         );
       }}
