@@ -160,18 +160,17 @@ export function DirectPayment({
         <input type="hidden" name="invoiceId" value={invoiceId} />
         <input type="hidden" name="operator" value={operator} />
         <div className="grid gap-1.5">
-          <Label htmlFor="txnRef">N° de transaction (SMS de confirmation)</Label>
+          <Label htmlFor="txnRef">N° de transaction (facultatif)</Label>
           <Input
             id="txnRef"
             name="txnRef"
-            required
             minLength={4}
             maxLength={60}
             autoComplete="off"
             autoCapitalize="characters"
             spellCheck={false}
             pattern="[A-Za-z0-9._\-]+"
-            placeholder={refExamples[operator] ? `ex. ${refExamples[operator]}` : "Copiez-le depuis le SMS reçu"}
+            placeholder={refExamples[operator] ? `ex. ${refExamples[operator]}` : "Si vous l'avez, depuis le SMS reçu"}
             className="font-mono"
           />
         </div>

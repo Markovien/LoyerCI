@@ -100,18 +100,29 @@ export const loginSchema = z.object({
     .transform((v) => (v && /^\/(?!\/)[\w\-/]*$/.test(v) ? v : "/dashboard")), // anti open-redirect
 });
 
+/** N° de transaction opérateur facultatif : vide -> undefined ; format exact vérifié en base. */
+export const optionalTxnRef = z
+  .string()
+  .trim()
+  .optional()
+  .transform((v) => (v ? v : undefined))
+  .pipe(
+    z
+      .string()
+      .min(4, "Numéro de transaction trop court")
+      .max(60)
+      .regex(/^[A-Za-z0-9._-]+$/, "Numéro de transaction invalide (lettres, chiffres, . _ -)")
+      .optional(),
+  );
+
 /** Déclaration d'un paiement direct (Mobile Money vers le compte du bailleur). */
 export const directPaymentSchema = z.object({
   invoiceId: uuid,
   operator: mobileOperator,
   amount: amountXOF,
   // Contrôle de forme seulement : le format exact par opérateur est vérifié en base.
-  txnRef: z
-    .string()
-    .trim()
-    .min(4, "Indiquez le numéro de transaction reçu par SMS")
-    .max(60)
-    .regex(/^[A-Za-z0-9._-]+$/, "Numéro de transaction invalide (lettres, chiffres, . _ -)"),
+  // Facultatif depuis le 21/11/2026 : le bailleur confirme en consultant son compte.
+  txnRef: optionalTxnRef,
   payerPhone: z
     .string()
     .trim()
@@ -120,3 +131,17 @@ export const directPaymentSchema = z.object({
     .pipe(phoneCI.optional())
     .refine((v) => !v || /^225(01|05|07)/.test(v), "Indiquez un numéro mobile (01, 05 ou 07)"),
 });
+
+/** « Encaissement reçu » saisi par le bailleur (Mobile Money ou virement constaté sur son compte). */
+export const receivedPaymentSchema = z
+  .object({
+    invoiceId: uuid,
+    method: z.enum(["mobile_money", "virement"]),
+    operator: mobileOperator.optional(),
+    amount: amountXOF,
+    txnRef: optionalTxnRef,
+    bankReference: safeText(80)
+      .optional()
+      .transform((v) => (v ? v : undefined)),
+  })
+  .refine((v) => v.method !== "mobile_money" || v.operator !== undefined, { message: "Choisissez l'opérateur", path: ["operator"] });

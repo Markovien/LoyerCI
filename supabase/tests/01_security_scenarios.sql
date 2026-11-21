@@ -586,14 +586,14 @@ begin
     raise exception 'ÉCHEC : n° de transaction opérateur réutilisé (casse différente)';
   exception when unique_violation then null;
   end;
-  begin
-    insert into public.payments (org_id, invoice_id, method, provider, operator, amount, status, provider_transaction_id, declared_by)
-    values (v_inv.org_id, v_inv.id, 'mobile_money', 'direct', 'wave', 1000, 'en_attente_validation', 'DIR-' || gen_random_uuid(), 'a0000000-0000-4000-8000-000000000003');
-    raise exception 'ÉCHEC : paiement direct sans n° de transaction';
+  begin -- depuis le 21/11/2026 le n° de transaction est facultatif, mais l'opérateur reste obligatoire
+    insert into public.payments (org_id, invoice_id, method, provider, amount, status, provider_transaction_id, declared_by)
+    values (v_inv.org_id, v_inv.id, 'mobile_money', 'direct', 1000, 'en_attente_validation', 'DIR-' || gen_random_uuid(), 'a0000000-0000-4000-8000-000000000003');
+    raise exception 'ÉCHEC : paiement direct sans opérateur';
   exception when check_violation then null;
   end;
   delete from public.payments where operator_txn_ref = 'T2611AB12CD';
-  raise notice 'OK  P1.1 n° de transaction opérateur unique (insensible à la casse) et obligatoire';
+  raise notice 'OK  P1.1 n° de transaction opérateur unique (insensible à la casse) ; opérateur obligatoire';
 end $$;
 
 set role service_role;
@@ -897,5 +897,89 @@ do $$ begin
   assert not has_column_privilege('authenticated', 'public.payments', 'payer_msisdn', 'select'), 'privilège de colonne';
   assert not has_column_privilege('anon', 'public.payments', 'payer_msisdn_hint', 'select'), 'anon';
 end $$;
+
+
+-- =============================================================================
+-- P1.5 révisé — « Encaissement reçu » par le bailleur ; n° de transaction facultatif
+-- =============================================================================
+set role service_role;
+select public.generate_monthly_invoices('2026-08-01') \g /dev/null
+do $$
+declare
+  v_k uuid := (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000001' and period = '2026-08-01');
+  v_t uuid := (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000002' and period = '2026-08-01');
+  v_owner constant uuid := 'a0000000-0000-4000-8000-000000000001';
+  v_acc   constant uuid := 'a0000000-0000-4000-8000-000000000005';
+  p uuid;
+begin
+  -- Gestionnaire : jamais d'attestation d'encaissement (décision du 21/11)
+  begin
+    perform public.record_received_payment('a0000000-0000-4000-8000-000000000002', v_k, 'mobile_money', 'wave', 1000, null, null, null, null);
+    raise exception 'ÉCHEC : un gestionnaire enregistre un encaissement';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.record_received_payment(v_owner, v_k, 'especes', null, 1000, null, null, null, null);
+    raise exception 'ÉCHEC : espèces acceptées hors record_cash_payment (contournement D2)';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.record_received_payment(v_owner, v_k, 'mobile_money', null, 1000, null, null, null, null);
+    raise exception 'ÉCHEC : Mobile Money sans opérateur';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.record_received_payment(v_owner, v_k, 'mobile_money', 'wave', 450001, null, null, null, null);
+    raise exception 'ÉCHEC : montant supérieur au reste dû';
+  exception when invalid_parameter_value then null;
+  end;
+
+  -- Propriétaire : Wave avec n° lu dans son historique -> imputé aussitôt, pas de quittance (partiel)
+  p := public.record_received_payment(v_owner, v_k, 'mobile_money', 'wave', 200000, 'W261121.AAA01', null, '41.202.10.5', 'Chrome');
+  assert (select status from public.payments where id = p) = 'reussi', 'encaissement immédiat';
+  assert (select amount_paid from public.invoices where id = v_k) = 200000, 'imputation';
+  begin -- même transfert enregistré deux fois (autre avis, autre opérateur, casse différente)
+    perform public.record_received_payment(v_owner, v_t, 'mobile_money', 'orange', 1000, 'w261121.aaa01', null, null, null);
+    raise exception 'ÉCHEC : même transfert enregistré deux fois';
+  exception when raise_exception then null;
+  end;
+  -- Comptable : virement sans preuve, immédiat (décision 3 du 21/11) ; le solde émet la quittance
+  p := public.record_received_payment(v_acc, v_k, 'virement', null, 250000, null, 'SGCI-20261121-0042', null, null);
+  assert (select status from public.invoices where id = v_k) = 'paye', 'avis soldé';
+  assert (select count(*) from public.receipts where invoice_id = v_k) = 1, 'une quittance';
+  assert (select payment_methods from public.receipts where invoice_id = v_k) = 'mobile_money+virement', 'modes de règlement';
+  raise notice 'OK  P1.5 encaissement reçu : owner/accountant, immédiat, MM et virement, gestionnaire et espèces refusés, transfert unique';
+
+  -- Locataire : « J'ai payé » sans n° de transaction (décision 1 a)
+  p := public.submit_direct_payment('a0000000-0000-4000-8000-000000000004', v_t, 'orange', 100000, null, null, null, null, null);
+  assert (select operator_txn_ref from public.payments where id = p) is null, 'déclaration sans n° acceptée';
+  begin -- le bailleur ne peut pas enregistrer en double pendant qu'une déclaration attend
+    perform public.record_received_payment(v_owner, v_t, 'mobile_money', 'orange', 100000, null, null, null, null);
+    raise exception 'ÉCHEC : encaissement enregistré malgré une déclaration en attente';
+  exception when raise_exception then null;
+  end;
+  raise notice 'OK  P1.5 locataire : déclaration sans n° de transaction ; pas de double saisie bailleur pendant l''attente';
+
+end $$;
+-- Les espèces (autre canal d'argent) ne sont pas bloquées par une déclaration en attente :
+-- on solde l'avis en espèces puis on tente de confirmer la déclaration.
+do $$
+declare
+  v_t uuid := (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000002' and period = '2026-08-01');
+  p uuid := (select id from public.payments where invoice_id = (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000002' and period = '2026-08-01') and status = 'en_attente_validation');
+begin
+  perform public.record_cash_payment('a0000000-0000-4000-8000-000000000001', v_t, (select amount_due - amount_paid from public.invoices where id = v_t), null, null);
+  assert (select status from public.invoices where id = v_t) = 'paye', 'avis soldé en espèces';
+  begin
+    perform public.review_manual_payment('a0000000-0000-4000-8000-000000000001', p, true, null, null, null);
+    raise exception 'ÉCHEC : déclaration confirmée sur un avis soldé';
+  exception when raise_exception then
+    assert sqlerrm like '%déjà soldé%', 'message inattendu : ' || sqlerrm;
+  end;
+  assert (select credit_amount from public.invoices where id = v_t) = 0, 'trop-perçu fantôme';
+  assert public.review_manual_payment('a0000000-0000-4000-8000-000000000001', p, false, 'Déjà réglé en espèces au guichet', null, null) = 'rejete', 'rejet';
+  raise notice 'OK  P1.5 confirmation refusée sur un avis soldé (rejet motivé possible), aucun trop-perçu fantôme';
+end $$;
+reset role;
 
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

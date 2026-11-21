@@ -73,3 +73,22 @@ describe("déclaration de paiement direct (Zod)", () => {
     expect(directPaymentSchema.safeParse({ ...base, amount: "450000.5" }).success).toBe(false);
   });
 });
+
+describe("encaissement reçu et n° facultatif (P1.5 révisé)", () => {
+  it("n° de transaction facultatif côté locataire, contrôlé s'il est saisi", async () => {
+    const { directPaymentSchema } = await import("@/lib/validation/schemas");
+    const base = { invoiceId: "6f1c2b8e-1d2a-4b3c-8d4e-123456789abc", operator: "wave", amount: "450000" };
+    expect(directPaymentSchema.parse({ ...base, txnRef: "" }).txnRef).toBeUndefined();
+    expect(directPaymentSchema.parse(base).txnRef).toBeUndefined();
+    expect(directPaymentSchema.safeParse({ ...base, txnRef: "ab" }).success).toBe(false);
+  });
+
+  it("encaissement Mobile Money : opérateur obligatoire ; virement : sans opérateur", async () => {
+    const { receivedPaymentSchema } = await import("@/lib/validation/schemas");
+    const base = { invoiceId: "6f1c2b8e-1d2a-4b3c-8d4e-123456789abc", amount: "450000" };
+    expect(receivedPaymentSchema.safeParse({ ...base, method: "mobile_money" }).success).toBe(false);
+    expect(receivedPaymentSchema.safeParse({ ...base, method: "mobile_money", operator: "wave", txnRef: "" }).success).toBe(true);
+    expect(receivedPaymentSchema.safeParse({ ...base, method: "virement", bankReference: "SGCI-1" }).success).toBe(true);
+    expect(receivedPaymentSchema.safeParse({ ...base, method: "especes" }).success).toBe(false); // espèces : règle D2 ailleurs
+  });
+});

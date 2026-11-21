@@ -183,7 +183,7 @@ export async function submitDirectPayment(_: ProofState, formData: FormData): Pr
     p_invoice: invoice.id,
     p_operator: parsed.data.operator,
     p_amount: parsed.data.amount,
-    p_txn_ref: parsed.data.txnRef,
+    p_txn_ref: parsed.data.txnRef ?? null,
     p_payer_msisdn: parsed.data.payerPhone ?? null,
     p_proof_path: path,
     p_ip: ctx.ip,

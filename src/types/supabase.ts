@@ -888,6 +888,20 @@ export type Database = {
           status: Database["public"]["Enums"]["payment_status"];
         }[];
       };
+      record_received_payment: {
+        Args: {
+          p_actor: string;
+          p_amount: number;
+          p_bank_reference: string;
+          p_invoice: string;
+          p_ip: unknown;
+          p_method: Database["public"]["Enums"]["payment_method"];
+          p_operator: Database["public"]["Enums"]["mobile_operator"];
+          p_txn_ref: string;
+          p_ua: string;
+        };
+        Returns: string;
+      };
       review_manual_payment: {
         Args: {
           p_actor: string;

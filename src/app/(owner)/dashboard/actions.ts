@@ -4,7 +4,7 @@ import { getActionUser } from "@/lib/auth/session";
 import { dbErrorMessage, supabaseAdmin } from "@/lib/supabase/admin";
 import { requestContext } from "@/lib/security/request-context";
 import { limit } from "@/lib/security/rate-limit";
-import { cashPaymentSchema, reviewManualPaymentSchema, uuid } from "@/lib/validation/schemas";
+import { cashPaymentSchema, receivedPaymentSchema, reviewManualPaymentSchema, uuid } from "@/lib/validation/schemas";
 
 export type ActionResult = { ok: boolean; message: string; url?: string };
 
@@ -91,4 +91,31 @@ export async function recordCashPayment(input: unknown): Promise<ActionResult> {
   return data.status === "en_attente_validation"
     ? { ok: true, message: "Encaissement enregistré, en attente de confirmation par le propriétaire (au-delà du seuil)." }
     : { ok: true, message: "Encaissement en espèces enregistré." };
+}
+
+/**
+ * « Encaissement reçu » : le bailleur (propriétaire ou comptable) constate sur SON compte
+ * un loyer reçu en Mobile Money ou par virement. Imputation immédiate ; la règle d'accès
+ * et l'unicité du n° de transaction sont revérifiées en base.
+ */
+export async function recordReceivedPayment(input: unknown): Promise<ActionResult> {
+  const g = await guard("received");
+  if ("error" in g) return g.error!;
+  const parsed = receivedPaymentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Saisie invalide" };
+
+  const { error } = await supabaseAdmin().rpc("record_received_payment", {
+    p_actor: g.user.id,
+    p_invoice: parsed.data.invoiceId,
+    p_method: parsed.data.method,
+    p_operator: parsed.data.method === "mobile_money" ? (parsed.data.operator ?? null) : null,
+    p_amount: parsed.data.amount,
+    p_txn_ref: parsed.data.method === "mobile_money" ? (parsed.data.txnRef ?? null) : null,
+    p_bank_reference: parsed.data.method === "virement" ? (parsed.data.bankReference ?? null) : null,
+    p_ip: g.ctx.ip,
+    p_ua: g.ctx.userAgent,
+  });
+  if (error) return { ok: false, message: dbErrorMessage(error) };
+  revalidatePath("/dashboard");
+  return { ok: true, message: "Encaissement enregistré. La quittance est générée si l'avis est soldé." };
 }
