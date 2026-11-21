@@ -16,6 +16,10 @@
 
 Décision produit du 18/11/2026 : **CinetPay devient optionnel et désactivé par défaut** ; le paiement direct vers les comptes du bailleur devient le mode Mobile Money par défaut.
 
+**Recentrage produit du 21/11/2026 (à lire avant toute tâche).** LoyerCI est avant tout un **outil de gestion intégré pour le bailleur** (propriétaire, gestionnaire, comptable). Une large part des locataires est peu à l'aise avec l'outil informatique (environ 48 % de la population est analphabète) : **l'effort repose sur le bailleur**. Pour le locataire, l'essentiel est de **recevoir et retrouver ses avis d'échéance et ses quittances**. Il ne doit jamais être bloqué par un formulaire. Conséquences : seul le bailleur atteste la réception des fonds (le locataire peut prévenir, sans obligation) ; le rapprochement automatique viendra plus tard (phase 5) ; nouvelle phase D « Documents » ; ordre d'exécution révisé ci-dessous.
+
+**Ordre d'exécution révisé :** P1.5 (révisé) → P1.6 → Phase D → Phase 2 → P1.7 → P1.8 → Phase 3 (allégée) → Phase 4 → Phase 5 → Phase 6.
+
 ---
 
 ## Phase 0 — Mise en route et filet de sécurité (prérequis)
@@ -72,11 +76,13 @@ Référence : `docs/ETUDE-PAIEMENT-DIRECT.md` §5. **Aucune modification des mig
 - Action `reviewManualPayment` remplaçant `reviewTransfer`.
 - Relance : si une déclaration reste en attente plus de 48 h, un badge rouge apparaît et une notification est envoyée (Phase 3).
 
-### P1.5 Assistant de rapprochement « Collez le SMS »
-- `src/lib/reconciliation/parsers/{orange,mtn,moov,wave,pispi}.ts` : fonctions pures `parse(text) → { amount, payerMsisdn?, txnRef?, date? } | null`.
-- **Ne pas inventer de format** : livrer des analyseurs génériques (montant en FCFA, numéro à 10 chiffres, jeton alphanumérique ressemblant à une référence) et une structure de tests `tests/fixtures/sms/<operateur>/*.txt` **vide**, avec un README demandant des échantillons anonymisés réels. Les analyseurs spécifiques seront ajoutés quand les échantillons seront fournis.
-- Fonction SQL `match_manual_payments(p_actor, p_org, p_amount, p_txn_ref, p_payer_msisdn)` : renvoie les candidats classés, **sans rien valider**.
-- Interface : zone de collage dans « Paiements à confirmer » → surligne le candidat → bouton « Confirmer ». Seule l'empreinte SHA-256 du texte collé est conservée (dans les métadonnées d'audit), jamais le texte.
+### P1.5 (révisé le 21/11/2026) « Encaissement reçu » côté bailleur
+> L'ancien « assistant de collage de SMS » est **reporté** au chantier d'automatisation (phase 5) : le bailleur confirme lui-même la réception, en consultant son propre compte.
+- Fonction `record_received_payment` (`owner` ou `accountant`) : le bailleur enregistre un loyer reçu en **Mobile Money** (opérateur, n° de transaction **facultatif**, lu dans SON historique) ou par **virement** (référence bancaire facultative), **sans déclaration préalable du locataire**. Imputation **immédiate**, y compris par un comptable (décision du 21/11 : traçable chez l'opérateur ou la banque, contrairement aux espèces). L'unicité du n° de transaction s'applique : on ne peut pas enregistrer deux fois le même transfert, ni enregistrer un transfert déjà déclaré par le locataire (le confirmer plutôt).
+- Refus si des déclarations du locataire sont en attente sur l'avis (les confirmer ou les rejeter d'abord) ; refus de confirmer une déclaration sur un avis déjà soldé.
+- Locataire : le **n° de transaction devient facultatif** dans « J'ai payé » (décision du 21/11, option a) ; s'il est saisi, il reste unique.
+- Interface : sur chaque avis du tableau de bord, bouton « Encaissement » (Espèces / Mobile Money / Virement) remplaçant « Espèces ».
+- La confirmation reste réservée à `owner` et `accountant` ; le gestionnaire (`manager`) n'atteste jamais un encaissement (décision du 21/11).
 
 ### P1.6 Paramètres de réception des fonds
 - Page `src/app/(owner)/dashboard/parametres/paiements/page.tsx` (`owner`) : liste des comptes (RIB, Wave, OM, MoMo, Moov, alias PI-SPI, liens marchands) avec statut « actif / effectif le … / révoqué », ajout et révocation via les fonctions existantes, interrupteurs `direct` / `cinetpay` / `virement`, texte d'information sur les frais.
@@ -90,6 +96,29 @@ Référence : `docs/ETUDE-PAIEMENT-DIRECT.md` §5. **Aucune modification des mig
 
 ### P1.8 Documentation et nettoyage
 - Mettre à jour `README.md`, `docs/ANALYSE.md` §2.1-4 (état PI-SPI de novembre 2026) et le seed (comptes Wave/OM du bailleur, une déclaration directe en attente, une confirmée).
+
+---
+
+## Phase D — Documents du locataire (décisions du 21/11/2026)
+
+Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut en vérifier l'authenticité, même s'il est peu lettré.
+
+### D.1 Avis d'échéance en PDF, signés et vérifiables
+- PDF d'avis (montant, échéance, période, bien, bailleur, référence) **sans aucune coordonnée de paiement** (invariant n° 9) : « payez à votre bailleur comme d'habitude ou au guichet de l'agence ».
+- Avis signés comme les quittances (signature versionnée), code de vérification et QR vers `/verify` (notre domaine, jamais un QR PI-SPI). `/verify` étendu aux avis. Résultat visuel compréhensible sans lire (grand ✓ vert / ✗ rouge).
+### D.2 Envoi des documents par e-mail ET WhatsApp (manuel au départ)
+- Démarrage avec une **adresse e-mail gratuite** et un **compte WhatsApp gratuit** ; l'envoi est fait depuis le back-office (file « à envoyer », un geste par message, document préparé). L'automatisation (SMTP transactionnel, WhatsApp Business API) viendra avec la croissance de l'activité.
+- Consentement du locataire au canal WhatsApp recueilli et tracé à la création du bail.
+- Chaque message rappelle la règle fixe : jamais de numéro de paiement, jamais de demande de code Mobile Money.
+### D.3 SMS de disponibilité + téléchargement après code à usage unique
+- SMS court **sans accents** (encodage GSM-7, 160 caractères) contenant l'essentiel (montant, période, n° de document, code de vérification) et un **lien de téléchargement**.
+- Le lien ouvre une page affichant le nom du bailleur et le numéro masqué ; un **code à usage unique est envoyé au numéro enregistré par le bailleur** (jamais à un numéro saisi), saisi par le locataire, puis le PDF est servi. Codes et renvois plafonnés ; chaque téléchargement journalisé.
+- Nécessite un fournisseur SMS (question ouverte).
+### D.4 Compte locataire facultatif (historique complet)
+- Création réservée aux numéros déjà connus d'un bailleur (pas d'inscription ouverte, décision D1), connexion par code SMS.
+- **Sortie du parc** (plus aucun bail actif chez aucun bailleur) : le locataire est invité à télécharger ses documents, rappel avant échéance, puis **suppression du compte et de son accès à M+3**. Les documents restent dans les archives du bailleur pendant la **durée légale de conservation** (pièces comptables, OHADA : à confirmer par un juriste) et `/verify` continue de répondre (données masquées).
+### D.5 Comptage des envois et facturation
+- Tous les envois (SMS, codes, e-mails, WhatsApp) sont **à la charge du bailleur** et inclus dans son abonnement : compteur par organisation, plafonds anti-abus, export pour la facturation.
 
 ---
 
@@ -113,8 +142,8 @@ Référence : `docs/ETUDE-PAIEMENT-DIRECT.md` §5. **Aucune modification des mig
 
 ## Phase 3 — Authentification et notifications
 
-### P3.1 OTP SMS
-- Supabase Phone Auth avec un fournisseur SMS couvrant la Côte d'Ivoire (choix à faire valider : coût et délivrabilité). Connexion par numéro pour les locataires (cas majoritaire), lien magique conservé pour l'e-mail.
+### P3.1 OTP SMS (périmètre réduit par la phase D)
+- Utilisé pour le compte locataire facultatif (D.4) et le téléchargement par code (D.3). Supabase Phone Auth avec un fournisseur SMS couvrant la Côte d'Ivoire (choix à faire valider : coût et délivrabilité). Connexion par numéro pour les locataires (cas majoritaire), lien magique conservé pour l'e-mail.
 ### P3.2 Notifications transactionnelles
 - File `notifications` (table + Edge Function ou tâche planifiée) : avis disponible, paiement déclaré (vers le bailleur), paiement confirmé ou rejeté (vers le locataire), quittance disponible, changement de compte de réception (alerte), déclaration en attente depuis plus de 48 h.
 - Canaux : e-mail (Resend ou SMTP), SMS. WhatsApp Business API en option (coût par conversation à évaluer). Les liens `wa.me` existants restent l'option gratuite et manuelle.
@@ -163,10 +192,21 @@ Référence : `docs/ETUDE-PAIEMENT-DIRECT.md` §5. **Aucune modification des mig
 - **Espèces** : au-delà d'un seuil par organisation (défaut 100 000 FCFA), un encaissement déclaré par un comptable attend la confirmation d'un `owner` avant la quittance (à intégrer à `review_manual_payment` en P1.2) ; notification au locataire (P3.2).
 - **Hébergement** : Supabase en région UE (Francfort ou Paris) et Vercel, avec dossier de transfert ARTCI (P4.8).
 
+## Décisions arbitrées (21/11/2026)
+
+- **Confirmation des encaissements** par le bailleur seulement (`owner`, `accountant`), jamais par le gestionnaire ; « Encaissement reçu » imputé immédiatement en Mobile Money et virement, même saisi par un comptable ; le seuil D2 reste propre aux espèces.
+- **Locataire** : « J'ai payé » conservé, n° de transaction facultatif. L'assistant de collage de SMS est reporté (phase 5).
+- **Documents** : envoi par e-mail ET WhatsApp (comptes gratuits, envoi manuel depuis le back-office au départ), SMS de disponibilité avec lien de téléchargement protégé par code à usage unique, compte locataire facultatif pour l'historique. Le lien « carnet sans compte » est abandonné.
+- **Avis** : jamais de coordonnée de paiement ; avis signés et vérifiables sur `/verify`.
+- **Sortie du parc** : suppression du compte locataire à M+3 ; documents conservés par le bailleur pendant la durée légale.
+- **Frais d'envoi** à la charge du bailleur, inclus dans son abonnement.
+
 ## Questions ouvertes (à trancher par le porteur de projet)
 
 1. Périmètre exact de l'interdiction du QR PI-SPI à distance : une affiche dans le hall d'un immeuble compte-t-elle comme « présence physique » ? (à confirmer auprès de la BCEAO ou d'un participant)
-2. Formats réels des n° de transaction et des SMS par opérateur (échantillons anonymisés nécessaires pour P1.5).
-3. Fournisseur SMS (P3.1) et budget des notifications.
+2. Formats réels des n° de transaction et des SMS par opérateur (utiles au rapprochement automatique de la phase 5, plus à P1.5).
+3. Fournisseur SMS (D.3, P3.1) : coût et délivrabilité en Côte d'Ivoire.
+6. Envoi manuel des documents (D.2) : qui l'opère ? Chaque bailleur depuis ses propres comptes, ou l'équipe LoyerCI depuis une adresse et un compte WhatsApp uniques (ce qui donnerait à l'équipe un accès transversal aux documents de tous les bailleurs) ?
+7. Durée légale de conservation des quittances et paiements (OHADA, 10 ans ?) à faire confirmer par un juriste.
 4. Politique de prorata, de pénalités de retard (attention au cadre légal) et durées de conservation.
 5. Modèle économique de LoyerCI (abonnement bailleur ?), qui ne doit **jamais** reposer sur la détention des loyers.
