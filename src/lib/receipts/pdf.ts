@@ -18,7 +18,7 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 /** Les polices standard PDF (WinAnsi) ne gèrent pas certaines espaces Unicode : on normalise. */
-const clean = (s: string) => s.replace(/[   ]/g, " ").replace(/[^\x20-\x7e -ÿ€’]/g, "");
+export const clean = (s: string) => s.replace(/[   ]/g, " ").replace(/[^\x20-\x7e -ÿ€’]/g, "");
 
 export function verifyUrl(appUrl: string, r: Pick<ReceiptRow, "id" | "signature">): string {
   return `${appUrl.replace(/\/$/, "")}/verify/${r.id}?c=${r.signature.slice(0, 16)}`;
@@ -159,7 +159,7 @@ export async function renderReceiptPdf(r: ReceiptRow, appUrl: string): Promise<U
   return pdf.save();
 }
 
-function wrap(s: string, font: PDFFont, size: number, maxWidth: number): string[] {
+export function wrap(s: string, font: PDFFont, size: number, maxWidth: number): string[] {
   const words = clean(s).split(" ");
   const lines: string[] = [];
   let current = "";

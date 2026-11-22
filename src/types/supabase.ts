@@ -269,6 +269,85 @@ export type Database = {
           },
         ];
       };
+      notices: {
+        Row: {
+          amount_due: number;
+          charges_amount: number;
+          content_hash: string;
+          due_date: string;
+          id: string;
+          invoice_id: string;
+          issued_at: string;
+          landlord_name: string;
+          org_id: string;
+          payment_reference: string;
+          period: string;
+          property_label: string;
+          property_location: string;
+          rent_amount: number;
+          signature: string;
+          signature_version: number;
+          tenant_id: string;
+          tenant_name: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          amount_due: number;
+          charges_amount: number;
+          content_hash: string;
+          due_date: string;
+          id?: string;
+          invoice_id: string;
+          issued_at: string;
+          landlord_name: string;
+          org_id: string;
+          payment_reference: string;
+          period: string;
+          property_label: string;
+          property_location: string;
+          rent_amount: number;
+          signature: string;
+          signature_version?: number;
+          tenant_id: string;
+          tenant_name: string;
+        };
+        Update: {
+          amount_due?: number;
+          charges_amount?: number;
+          content_hash?: string;
+          due_date?: string;
+          id?: string;
+          invoice_id?: string;
+          issued_at?: string;
+          landlord_name?: string;
+          org_id?: string;
+          payment_reference?: string;
+          period?: string;
+          property_label?: string;
+          property_location?: string;
+          rent_amount?: number;
+          signature?: string;
+          signature_version?: number;
+          tenant_id?: string;
+          tenant_name?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notices_invoice_id_org_id_fkey";
+            columns: ["invoice_id", "org_id"];
+            isOneToOne: false;
+            referencedRelation: "invoices";
+            referencedColumns: ["id", "org_id"];
+          },
+          {
+            foreignKeyName: "notices_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       operator_ref_formats: {
         Row: {
           example: string | null;
@@ -898,6 +977,10 @@ export type Database = {
         }[];
       };
       grant_reauth: { Args: { p_actor: string; p_ip: unknown; p_ua: string }; Returns: undefined };
+      issue_notice: {
+        Args: { p_actor: string; p_invoice: string; p_ip: unknown; p_ua: string };
+        Returns: string;
+      };
       log_proof_access: {
         Args: { p_actor: string; p_ip: unknown; p_payment: string; p_ua: string };
         Returns: string;
@@ -987,6 +1070,21 @@ export type Database = {
           p_ua: string;
         };
         Returns: string;
+      };
+      verify_notice: {
+        Args: { p_code: string; p_id: string };
+        Returns: {
+          amount_due: number;
+          due_date: string;
+          fingerprint: string;
+          issued_at: string;
+          landlord_name: string;
+          payment_reference: string;
+          period: string;
+          property_location: string;
+          tenant_masked: string;
+          verdict: string;
+        }[];
       };
       verify_receipt: {
         Args: { p_code: string; p_id: string };

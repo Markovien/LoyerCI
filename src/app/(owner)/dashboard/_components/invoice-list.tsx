@@ -47,7 +47,12 @@ export function InvoiceList({
                     <p className="truncate text-sm text-muted-foreground">
                       {p?.label} · {[p?.quartier, p?.commune].filter(Boolean).join(", ")}
                     </p>
-                    <p className="font-mono text-[11px] text-muted-foreground">{inv.payment_reference}</p>
+                    <p className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-muted-foreground">
+                      {inv.payment_reference}
+                      <a href={`/api/notices/${inv.id}/pdf`} className="font-sans text-xs text-primary underline-offset-2 hover:underline">
+                        Avis (PDF)
+                      </a>
+                    </p>
                   </div>
                   <div className="text-sm">
                     <p className="font-semibold">{formatXOF(inv.amount_due)}</p>

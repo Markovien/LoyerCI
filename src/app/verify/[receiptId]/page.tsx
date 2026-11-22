@@ -11,11 +11,10 @@ import { limit } from "@/lib/security/rate-limit";
 import { serverEnv } from "@/lib/env";
 import { z } from "zod";
 import { uuid, verifyParamsSchema } from "@/lib/validation/schemas";
-import type { VerifyReceiptResult } from "@/types/database";
-import { Verdict } from "./verdict";
+import { INVALID, Verdict, type DocumentVerdict } from "./verdict";
 
 export const metadata: Metadata = {
-  title: "Vérification de quittance",
+  title: "Vérification de document",
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 };
@@ -23,7 +22,7 @@ export const dynamic = "force-dynamic";
 
 const verdictSchema = z.enum(["authentique", "annulee", "invalide", "alteree"]);
 
-type View = { kind: "form"; error?: string } | { kind: "throttled" } | { kind: "result"; r: VerifyReceiptResult };
+type View = { kind: "form"; error?: string } | { kind: "throttled" } | { kind: "result"; r: DocumentVerdict };
 
 /**
  * Page publique (sans connexion), cible du QR code : /verify/<id>?c=<code>.
@@ -41,14 +40,49 @@ async function resolve(receiptId: string, code: string | undefined): Promise<Vie
   const ip = clientIpFrom(await headers(), env.CLIENT_IP_HEADER, env.TRUSTED_PROXY_HOPS);
   if (!limit(`verify:${ip ?? "?"}`, 20, 60_000).ok) return { kind: "throttled" };
 
-  // verify_receipt n'est exécutable que par service_role (pas d'appel PostgREST direct
-  // qui contournerait ce limiteur) ; elle ne renvoie que des données masquées.
-  const { data, error } = await supabaseAdmin().rpc("verify_receipt", { p_id: parsed.data.receiptId, p_code: parsed.data.code }).single();
-  if (error || !data) return { kind: "result", r: { verdict: "invalide" } as VerifyReceiptResult };
-  // Le verdict est un « text » SQL : toute valeur inattendue est traitée comme invalide.
-  const verdict = verdictSchema.safeParse(data.verdict);
-  if (!verdict.success) return { kind: "result", r: { verdict: "invalide" } as VerifyReceiptResult };
-  return { kind: "result", r: { ...data, verdict: verdict.data } };
+  // verify_receipt / verify_notice ne sont exécutables que par service_role (pas d'appel
+  // PostgREST direct qui contournerait ce limiteur) ; elles ne renvoient que des données masquées.
+  const admin = supabaseAdmin();
+  const { data: rc } = await admin.rpc("verify_receipt", { p_id: parsed.data.receiptId, p_code: parsed.data.code }).single();
+  const rv = verdictSchema.safeParse(rc?.verdict);
+  if (rc && rv.success && rv.data !== "invalide") {
+    return {
+      kind: "result",
+      r: {
+        verdict: rv.data,
+        docType: "quittance",
+        number: rc.receipt_number,
+        landlordName: rc.landlord_name,
+        tenantMasked: rc.tenant_masked,
+        location: rc.property_location,
+        period: rc.period,
+        amount: rc.amount,
+        date: rc.paid_at,
+        fingerprint: rc.fingerprint,
+        revokedAt: rc.revoked_at,
+      },
+    };
+  }
+  // Même identifiant possible pour un avis d'échéance signé.
+  const { data: nc } = await admin.rpc("verify_notice", { p_id: parsed.data.receiptId, p_code: parsed.data.code }).single();
+  const nv = verdictSchema.safeParse(nc?.verdict);
+  if (!nc || !nv.success) return { kind: "result", r: INVALID };
+  return {
+    kind: "result",
+    r: {
+      verdict: nv.data,
+      docType: nv.data === "invalide" ? null : "avis",
+      number: nc.payment_reference,
+      landlordName: nc.landlord_name,
+      tenantMasked: nc.tenant_masked,
+      location: nc.property_location,
+      period: nc.period,
+      amount: nc.amount_due,
+      date: nc.due_date,
+      fingerprint: nc.fingerprint,
+      revokedAt: null,
+    },
+  };
 }
 
 export default async function VerifyPage({
@@ -60,7 +94,7 @@ export default async function VerifyPage({
 }) {
   const [{ receiptId }, { c }] = await Promise.all([params, searchParams]);
   const validId = uuid.safeParse(receiptId).success;
-  const view: View = validId ? await resolve(receiptId, c) : { kind: "result", r: { verdict: "invalide" } as VerifyReceiptResult };
+  const view: View = validId ? await resolve(receiptId, c) : { kind: "result", r: INVALID };
   const host = new URL(serverEnv().NEXT_PUBLIC_APP_URL).host;
 
   return (
@@ -74,9 +108,9 @@ export default async function VerifyPage({
       {view.kind === "form" && (
         <Card>
           <CardContent className="grid gap-4 p-5">
-            <h1 className="text-lg font-semibold">Vérifier une quittance</h1>
+            <h1 className="text-lg font-semibold">Vérifier une quittance ou un avis</h1>
             <form method="get" className="grid gap-3">
-              <Label htmlFor="c">Code de vérification imprimé sur la quittance</Label>
+              <Label htmlFor="c">Code de vérification imprimé sur le document</Label>
               <Input
                 id="c"
                 name="c"

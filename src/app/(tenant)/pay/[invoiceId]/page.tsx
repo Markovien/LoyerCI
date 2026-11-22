@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarClock, Download, Home, ShieldCheck } from "lucide-react";
+import { CalendarClock, Download, FileText, Home, ShieldCheck } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { InvoiceStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -119,6 +119,12 @@ export default async function PayPage({ params }: { params: Promise<{ invoiceId:
           </div>
         </CardHeader>
         <CardContent>
+          <Button asChild variant="outline" className="mb-4 w-full">
+            <a href={`/api/notices/${inv.id}/pdf`}>
+              <FileText />
+              Télécharger l&apos;avis d&apos;échéance (PDF)
+            </a>
+          </Button>
           {payable ? (
             <PaymentPanel
               invoiceId={inv.id}

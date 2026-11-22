@@ -1073,4 +1073,90 @@ do $$ begin
   assert exists (select 1 from public.audit_logs where action = 'reauthentification' and host(ip) = '41.202.10.5'), 'ré-authentification non tracée';
 end $$;
 
+
+-- =============================================================================
+-- D.1 — Avis d'échéance signés et vérifiables
+-- =============================================================================
+set role service_role;
+select public.generate_monthly_invoices('2026-09-01') \g /dev/null
+do $$
+declare
+  v_inv uuid := (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-000000000001' and period = '2026-09-01');
+  n1 uuid; n2 uuid;
+begin
+  begin
+    perform public.issue_notice('a0000000-0000-4000-8000-000000000004', v_inv, null, null); -- autre locataire
+    raise exception 'ÉCHEC : avis émis pour un tiers';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.issue_notice('b0000000-0000-4000-8000-000000000001', v_inv, null, null); -- propriétaire d'une autre organisation
+    raise exception 'ÉCHEC : avis émis par une autre organisation';
+  exception when insufficient_privilege then null;
+  end;
+  n1 := public.issue_notice('a0000000-0000-4000-8000-000000000003', v_inv, '41.66.1.2', 'Android'); -- locataire
+  n2 := public.issue_notice('a0000000-0000-4000-8000-000000000002', v_inv, null, null);             -- gestionnaire
+  assert n1 = n2, 'émission non idempotente';
+  raise notice 'OK  D.1 émission : locataire ou membre de l''organisation, idempotente, refusée aux tiers';
+end $$;
+reset role;
+do $$
+declare
+  n public.notices := (select x from public.notices x limit 1);
+  v record;
+begin
+  select * into v from public.verify_notice(n.id, left(n.signature, 16));
+  assert v.verdict = 'authentique', 'verdict attendu authentique : ' || v.verdict;
+  assert v.tenant_masked = 'Ko***** J.-M.', 'nom non masqué : ' || coalesce(v.tenant_masked, '');
+  assert v.amount_due = 450000 and v.payment_reference like 'LOYER-2026-09-VCR01-%', 'contenu';
+  select * into v from public.verify_notice(n.id, '0000000000000000');
+  assert v.verdict = 'invalide' and v.landlord_name is null, 'code faux accepté';
+  select * into v from public.verify_receipt(n.id, left(n.signature, 16));
+  assert v.verdict = 'invalide', 'un avis passe pour une quittance';
+  begin
+    update public.notices set amount_due = 45000 where id = n.id;
+    raise exception 'ÉCHEC : avis modifiable';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.notices where id = n.id;
+    raise exception 'ÉCHEC : avis supprimable';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+alter table public.notices disable trigger notices_immutable;
+update public.notices set landlord_name = 'ESCROC SARL';
+alter table public.notices enable trigger notices_immutable;
+do $$
+declare n public.notices := (select x from public.notices x limit 1); v record;
+begin
+  select * into v from public.verify_notice(n.id, left(n.signature, 16));
+  assert v.verdict = 'alteree', 'altération de l''avis non détectée : ' || v.verdict;
+end $$;
+alter table public.notices disable trigger notices_immutable;
+update public.notices set landlord_name = 'Akwaba Immobilier';
+alter table public.notices enable trigger notices_immutable;
+update public.invoices set status = 'annule' where id = (select invoice_id from public.notices limit 1);
+do $$
+declare n public.notices := (select x from public.notices x limit 1); v record;
+begin
+  select * into v from public.verify_notice(n.id, left(n.signature, 16));
+  assert v.verdict = 'annulee', 'avis annulé non signalé : ' || v.verdict;
+  assert not has_function_privilege('anon', 'public.verify_notice(uuid, text)', 'execute'), 'verify_notice exposé à anon';
+  assert not has_function_privilege('authenticated', 'public.issue_notice(uuid, uuid, inet, text)', 'execute'), 'issue_notice exposé';
+  raise notice 'OK  D.1 vérification : authentique, code faux refusé, altération détectée, annulation signalée, immuable, distinct des quittances';
+end $$;
+update public.invoices set status = 'a_payer' where id = (select invoice_id from public.notices limit 1);
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000004';
+do $$ begin
+  assert (select count(*) from public.notices) = 0, 'un locataire lit l''avis d''un autre';
+end $$;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000003';
+do $$ begin
+  assert (select count(*) from public.notices) = 1, 'le locataire doit lire son avis';
+  raise notice 'OK  D.1 RLS : le locataire ne lit que ses avis';
+end $$;
+reset role;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

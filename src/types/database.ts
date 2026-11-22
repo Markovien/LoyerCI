@@ -74,17 +74,3 @@ export interface ReceiptRow {
   status: "valide" | "annulee";
   issued_at: string;
 }
-
-export interface VerifyReceiptResult {
-  verdict: "authentique" | "annulee" | "invalide" | "alteree";
-  receipt_number: string | null;
-  landlord_name: string | null;
-  tenant_masked: string | null;
-  property_location: string | null;
-  period: string | null;
-  amount: number | null;
-  paid_at: string | null;
-  issued_at: string | null;
-  fingerprint: string | null;
-  revoked_at: string | null;
-}

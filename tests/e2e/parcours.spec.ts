@@ -91,9 +91,9 @@ test.describe("quittance", () => {
 
     const { data: r } = await admin().from("receipts").select("id, signature").eq("invoice_id", invoiceId).single();
     await page.goto(`/verify/${r!.id}?c=${r!.signature.slice(0, 16)}`);
-    await expect(page.getByText("Quittance Authentique")).toBeVisible();
+    await expect(page.getByText("Quittance authentique")).toBeVisible();
 
     const bad = await request.get(`/verify/${r!.id}?c=0123456789abcdef`);
-    expect(await bad.text()).toContain("Quittance non reconnue");
+    expect(await bad.text()).toContain("Document non reconnu");
   });
 });
