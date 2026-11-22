@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, ShieldCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings, ShieldCheck } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { requireOrgMember } from "@/lib/auth/session";
@@ -9,6 +9,8 @@ import type { DashboardKpis } from "@/types/database";
 import { KpiGrid } from "./_components/kpi-grid";
 import { InvoiceList } from "./_components/invoice-list";
 import { PendingPayments, type PendingPaymentView } from "./_components/pending-payments";
+import { PendingAccountsBanner } from "./_components/pending-accounts-banner";
+import { toAccountView } from "./parametres/paiements/types";
 import { RealtimeRefresh } from "./_components/realtime-refresh";
 
 export const metadata: Metadata = { title: "Tableau de bord" };
@@ -39,7 +41,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
   // Lectures avec le JWT de l'utilisateur : la RLS garantit le cloisonnement.
-  const [kpis, invoices, pending] = await Promise.all([
+  const [kpis, invoices, pending, carence] = await Promise.all([
     supabase.rpc("dashboard_kpis", { p_org: orgId, p_month: period }).single(),
     supabase
       .from("invoices")
@@ -58,6 +60,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           .eq("org_id", orgId)
           .eq("status", "en_attente_validation")
           .order("created_at")
+      : Promise.resolve({ data: [] }),
+    // Comptes de réception en carence (RLS : owner/accountant seulement).
+    canValidate
+      ? supabase
+          .from("payout_accounts")
+          .select(
+            "id, kind, operator, bank_name, iban, msisdn, pispi_alias, payment_link_url, account_holder, display_name_expected, activates_at, revoked_at, created_by",
+          )
+          .eq("org_id", orgId)
+          .is("revoked_at", null)
+          .gt("activates_at", new Date().toISOString())
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -85,6 +98,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     period: p.invoices?.period ?? "",
   }));
 
+  const carenceRaw = carence.data ?? [];
+  const creatorIds = [...new Set(carenceRaw.map((a) => a.created_by))];
+  const { data: creators } = creatorIds.length
+    ? await supabase.from("profiles").select("id, full_name").in("id", creatorIds)
+    : { data: [] as { id: string; full_name: string }[] };
+  const carenceViews = carenceRaw.map((a) => toAccountView(a, new Map((creators ?? []).map((c) => [c.id, c.full_name]))));
+
   const orgName = membership.organizations?.name ?? "Mon organisation";
   const roleLabel = { owner: "Propriétaire", manager: "Gestionnaire", accountant: "Comptable" }[membership.role];
 
@@ -94,6 +114,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <Brand href="/dashboard" />
         <div className="flex items-center gap-3 text-sm">
           <RealtimeRefresh orgId={orgId} />
+          {membership.role === "owner" && (
+            <Link href="/dashboard/parametres/paiements" className="inline-flex items-center gap-1 text-muted-foreground hover:underline">
+              <Settings className="size-4" aria-hidden />
+              <span className="hidden sm:inline">Réception des fonds</span>
+            </Link>
+          )}
           <span className="hidden text-muted-foreground sm:inline">
             {orgName} · {roleLabel}
           </span>
@@ -123,6 +149,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       </div>
 
       <KpiGrid k={kpis.data ?? EMPTY_KPIS} />
+
+      <PendingAccountsBanner accounts={carenceViews} canCancel={membership.role === "owner"} />
 
       {canValidate && <PendingPayments rows={pendingRows} role={membership.role} />}
 

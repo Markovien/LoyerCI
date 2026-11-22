@@ -133,11 +133,13 @@ set role service_role;
 do $$
 declare r record;
 begin
+  perform public.grant_reauth('a0000000-0000-4000-8000-000000000001', null, null); -- P1.6 : ré-authentification requise
   select * into r from public.add_payout_account('a0000000-0000-4000-8000-000000000001',
     'c0000000-0000-4000-8000-000000000001', 'banque', 'AKWABA IMMOBILIER SARL', 'Société Générale Côte d''Ivoire',
     'CI15 CI00 8011 1301 3400 1253 0091', null, null, '41.202.10.5', 'test');
   assert r.activates_at <= now(), 'le premier RIB doit être actif immédiatement';
 
+  perform public.grant_reauth('a0000000-0000-4000-8000-000000000001', null, null); -- P1.6 : ré-authentification requise
   select * into r from public.add_payout_account('a0000000-0000-4000-8000-000000000001',
     'c0000000-0000-4000-8000-000000000001', 'banque', 'PIRATE', 'Banque X',
     'CI51 CI00 9999 9999 9999 9999 9999', null, null, '102.0.0.66', 'test');
@@ -146,6 +148,7 @@ begin
 end $$;
 
 do $$ begin
+  perform public.grant_reauth('a0000000-0000-4000-8000-000000000001', null, null); -- P1.6 : ré-authentification requise
   perform public.add_payout_account('a0000000-0000-4000-8000-000000000001',
     'c0000000-0000-4000-8000-000000000001', 'banque', 'X', 'Banque Y', 'CI15CI0080111301340012530092', null, null, null, null);
   raise exception 'ÉCHEC : IBAN à clé fausse accepté';
@@ -402,15 +405,18 @@ begin
   for r in select id from public.payout_accounts where org_id = 'c0000000-0000-4000-8000-000000000001' and revoked_at is null loop
     perform public.cancel_payout_account('a0000000-0000-4000-8000-000000000001', r.id, '102.0.0.66', 'pirate');
   end loop;
+  perform public.grant_reauth('a0000000-0000-4000-8000-000000000001', null, null); -- P1.6 : ré-authentification requise
   select * into r from public.add_payout_account('a0000000-0000-4000-8000-000000000001',
     'c0000000-0000-4000-8000-000000000001', 'banque', 'PIRATE 2', 'Banque X',
     'CI51CI0099999999999999999999', null, null, '102.0.0.66', 'pirate');
   assert r.activates_at > now() + interval '47 hours', 'S1 : carence contournée par révocation préalable';
   -- Nouveau type (Mobile Money après un RIB) : carence également
+  perform public.grant_reauth('a0000000-0000-4000-8000-000000000001', null, null); -- P1.6 : ré-authentification requise
   select * into r from public.add_payout_account('a0000000-0000-4000-8000-000000000001',
     'c0000000-0000-4000-8000-000000000001', 'mobile_money', 'PIRATE 3', null, null, 'wave', '2250707999999', '102.0.0.66', 'pirate');
   assert r.activates_at > now() + interval '47 hours', 'S1 : carence contournée par changement de type';
   -- Première configuration d'une organisation vierge : immédiate
+  perform public.grant_reauth('b0000000-0000-4000-8000-000000000001', null, null); -- P1.6 : ré-authentification requise
   select * into r from public.add_payout_account('b0000000-0000-4000-8000-000000000001',
     'c0000000-0000-4000-8000-000000000002', 'mobile_money', 'SCI LAGUNE', null, null, 'orange', '2250707111222', null, null);
   assert r.activates_at <= now(), 'S1 : la toute première coordonnée doit être active immédiatement';
@@ -549,7 +555,8 @@ end $$;
 
 -- S5 : chaînage d'audit v2 — le user_agent est couvert
 do $$ begin
-  assert not exists (select 1 from private.verify_audit_chain() where reason <> 'contenu altéré' or broken_at_seq > 4),
+  assert not exists (select 1 from private.verify_audit_chain() where reason <> 'contenu altéré'
+                     or broken_at_seq > (select min(chain_seq) from public.audit_logs where host(ip) = '8.8.8.8')),
     'S5 : chaîne mixte v1/v2 invalide hors altération volontaire précédente';
 end $$;
 alter table public.audit_logs disable trigger audit_logs_no_update;
@@ -599,6 +606,7 @@ end $$;
 set role service_role;
 do $$ begin
   begin
+    perform public.grant_reauth('a0000000-0000-4000-8000-000000000001', null, null); -- P1.6 : ré-authentification requise
     perform public.add_payout_account('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001',
       'pispi_alias', 'AKWABA', null, null, null, null, null, null);
     raise exception 'ÉCHEC : alias PI-SPI absent accepté';
@@ -981,5 +989,88 @@ begin
   raise notice 'OK  P1.5 confirmation refusée sur un avis soldé (rejet motivé possible), aucun trop-perçu fantôme';
 end $$;
 reset role;
+
+
+-- =============================================================================
+-- P1.6 — Coordonnées de réception : ré-authentification vérifiée en base
+-- =============================================================================
+-- Exécuté en superutilisateur : le test manipule private.* (expiration simulée, file
+-- d'alertes), auquel service_role lui-même n'a pas accès.
+do $$
+declare r record;
+begin
+  begin -- sans code : refus, même pour le propriétaire
+    perform public.add_receiving_account('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001',
+      'mobile_money', 'AKWABA', 'AKWABA IMMOBILIER', null, null, 'moov', '2250101000222', null, null, null, null);
+    raise exception 'ÉCHEC : ajout sans ré-authentification';
+  exception when insufficient_privilege then
+    assert sqlerrm like '%Ré-authentification requise%', 'message inattendu : ' || sqlerrm;
+  end;
+
+  -- avec code : accepté, en carence (l'organisation a déjà des comptes), alerte en file
+  perform public.grant_reauth('a0000000-0000-4000-8000-000000000001', '41.202.10.5', 'Chrome');
+  select * into r from public.add_receiving_account('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001',
+    'mobile_money', 'AKWABA', 'AKWABA IMMOBILIER', null, null, 'moov', '2250101000222', null, null, '41.202.10.5', 'Chrome');
+  assert r.activates_at > now() + interval '47 hours', 'carence attendue';
+  assert exists (select 1 from private.outbox o where o.kind = 'alerte_compte_reception'
+                  and (o.payload ->> 'payout_account_id')::uuid = r.id and o.payload ->> 'coordonnee' = '****0222'), 'alerte absente ou non masquée';
+
+  begin -- l'autorisation est à usage unique
+    perform public.add_receiving_account('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001',
+      'pispi_alias', 'AKWABA', null, null, null, null, null, '+2250707000111', null, null, null);
+    raise exception 'ÉCHEC : autorisation réutilisée';
+  exception when insufficient_privilege then null;
+  end;
+
+  -- autorisation expirée (plus de 5 minutes)
+  perform public.grant_reauth('a0000000-0000-4000-8000-000000000001', null, null);
+  update private.reauth_grants set granted_at = now() - interval '6 minutes' where consumed_at is null;
+  begin
+    perform public.add_receiving_account('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001',
+      'pispi_alias', 'AKWABA', null, null, null, null, null, '+2250707000111', null, null, null);
+    raise exception 'ÉCHEC : autorisation expirée acceptée';
+  exception when insufficient_privilege then null;
+  end;
+
+  -- l'autorisation d'un autre utilisateur ne sert à rien
+  perform public.grant_reauth('a0000000-0000-4000-8000-000000000005', null, null); -- comptable
+  begin
+    perform public.add_receiving_account('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001',
+      'pispi_alias', 'AKWABA', null, null, null, null, null, '+2250707000111', null, null, null);
+    raise exception 'ÉCHEC : autorisation d''un autre utilisateur utilisée';
+  exception when insufficient_privilege then null;
+  end;
+  begin -- et un comptable ré-authentifié reste interdit d'ajout (owner uniquement)
+    perform public.add_receiving_account('a0000000-0000-4000-8000-000000000005', 'c0000000-0000-4000-8000-000000000001',
+      'pispi_alias', 'AKWABA', null, null, null, null, null, '+2250707000111', null, null, null);
+    raise exception 'ÉCHEC : un comptable ajoute une coordonnée';
+  exception when insufficient_privilege then null;
+  end;
+
+  -- alias PI-SPI (SHID) et lien marchand en liste blanche
+  perform public.grant_reauth('a0000000-0000-4000-8000-000000000001', null, null);
+  perform public.add_receiving_account('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001',
+    'pispi_alias', 'AKWABA', 'AKWABA IMMOBILIER', null, null, null, null, '6f1c2b8e-1d2a-4b3c-8d4e-123456789abc', null, null, null);
+  insert into public.allowed_payment_link_hosts (host, operator) values ('pay.exemple-operateur.ci', 'wave');
+  perform public.grant_reauth('a0000000-0000-4000-8000-000000000001', null, null);
+  perform public.add_receiving_account('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001',
+    'payment_link', 'AKWABA', null, null, null, 'wave', null, null, 'https://pay.exemple-operateur.ci/m/akwaba', null, null);
+  delete from public.allowed_payment_link_hosts;
+
+  begin
+    perform public.grant_reauth('00000000-0000-4000-8000-00000000dead', null, null);
+    raise exception 'ÉCHEC : autorisation pour un utilisateur inexistant';
+  exception when insufficient_privilege then null;
+  end;
+  raise notice 'OK  P1.6 ré-authentification en base : obligatoire, usage unique, 5 min, non transférable ; alerte en file ; tous types de compte';
+end $$;
+do $$ begin
+  assert has_function_privilege('service_role', 'public.grant_reauth(uuid, inet, text)', 'execute'), 'serveur : grant_reauth';
+  assert not has_schema_privilege('service_role', 'private', 'usage'), 'service_role ne doit pas accéder au schéma private';
+  assert not has_function_privilege('authenticated', 'public.grant_reauth(uuid, inet, text)', 'execute'), 'grant_reauth exposé';
+  assert not has_table_privilege('authenticated', 'private.reauth_grants', 'select'), 'reauth_grants lisible';
+  assert not has_table_privilege('authenticated', 'private.outbox', 'select'), 'outbox lisible';
+  assert exists (select 1 from public.audit_logs where action = 'reauthentification' and host(ip) = '41.202.10.5'), 'ré-authentification non tracée';
+end $$;
 
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

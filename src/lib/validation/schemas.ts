@@ -145,3 +145,80 @@ export const receivedPaymentSchema = z
       .transform((v) => (v ? v : undefined)),
   })
   .refine((v) => v.method !== "mobile_money" || v.operator !== undefined, { message: "Choisissez l'opérateur", path: ["operator"] });
+
+/** Code à usage unique reçu par e-mail (ré-authentification, P1.6). */
+export const reauthCodeSchema = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/\s+/g, ""))
+  .pipe(z.string().regex(/^\d{6}$/, "Le code comporte 6 chiffres"));
+
+const holder = safeText(120).pipe(z.string().min(2, "Indiquez le titulaire du compte"));
+const displayName = safeText(120)
+  .optional()
+  .transform((v) => (v ? v : undefined));
+
+/** Coordonnée de réception des fonds (P1.6). Formats revérifiés par les contraintes en base. */
+export const receivingAccountSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("banque"),
+    holder,
+    displayName,
+    bank: safeText(80).pipe(z.string().min(2, "Indiquez la banque")),
+    iban: ibanCI,
+  }),
+  z.object({
+    kind: z.literal("mobile_money"),
+    holder,
+    displayName,
+    operator: mobileOperator,
+    msisdn: phoneCI.refine((v) => /^225(01|05|07)/.test(v), "Indiquez un numéro mobile (01, 05 ou 07)"),
+  }),
+  z.object({
+    kind: z.literal("pispi_alias"),
+    holder,
+    displayName,
+    alias: z
+      .string()
+      .trim()
+      .transform((v) => v.replace(/[\s.\-()]/g, ""))
+      .transform((v) => (/^(\+?225)?0[157]\d{8}$/.test(v) ? `+225${v.replace(/^\+?225/, "")}` : v.toLowerCase()))
+      .pipe(
+        z
+          .string()
+          .regex(
+            /^(\+2250[157]\d{8}|[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/,
+            "Alias PI-SPI : numéro mobile ou adresse de paiement (UUID)",
+          ),
+      ),
+  }),
+  z.object({
+    kind: z.literal("payment_link"),
+    holder,
+    displayName,
+    operator: mobileOperator,
+    url: z
+      .string()
+      .trim()
+      .max(300)
+      .refine((v) => {
+        try {
+          const u = new URL(v);
+          return u.protocol === "https:" && !u.username && !u.password && !u.port;
+        } catch {
+          return false;
+        }
+      }, "Lien https:// valide requis"),
+  }),
+]);
+
+export const paymentSettingsSchema = z
+  .object({
+    orgId: uuid,
+    direct: z.boolean(),
+    cinetpay: z.boolean(),
+    transfer: z.boolean(),
+    feesNotice: safeText(600).optional(),
+    cashThreshold: z.coerce.number().int().min(0).max(100_000_000),
+  })
+  .refine((v) => v.direct || v.cinetpay || v.transfer, { message: "Gardez au moins un mode de paiement actif", path: ["direct"] });

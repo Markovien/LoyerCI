@@ -134,6 +134,7 @@ async function main() {
   }
 
   console.log("→ RIB du bailleur");
+  await must(db.rpc("grant_reauth", { p_actor: owner, p_ip: "127.0.0.1", p_ua: "seed" }), "ré-authentification");
   await must(
     db.rpc("add_payout_account", {
       p_actor: owner,
@@ -156,6 +157,7 @@ async function main() {
     { p_kind: "mobile_money", p_operator: "orange", p_msisdn: "2250707000111" },
     { p_kind: "mobile_money", p_operator: "wave", p_msisdn: "2250505000333" },
   ] as const) {
+    await must(db.rpc("grant_reauth", { p_actor: owner, p_ip: "127.0.0.1", p_ua: "seed" }), "ré-authentification");
     await must(
       db.rpc("add_payout_account", {
         p_actor: owner,

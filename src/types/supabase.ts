@@ -775,6 +775,27 @@ export type Database = {
           id: string;
         }[];
       };
+      add_receiving_account: {
+        Args: {
+          p_actor: string;
+          p_bank: string;
+          p_display_name: string;
+          p_holder: string;
+          p_iban: string;
+          p_ip: unknown;
+          p_kind: Database["public"]["Enums"]["payout_kind"];
+          p_link_url: string;
+          p_msisdn: string;
+          p_operator: Database["public"]["Enums"]["mobile_operator"];
+          p_org: string;
+          p_pispi_alias: string;
+          p_ua: string;
+        };
+        Returns: {
+          activates_at: string;
+          id: string;
+        }[];
+      };
       cancel_payout_account: {
         Args: { p_account: string; p_actor: string; p_ip: unknown; p_ua: string };
         Returns: undefined;
@@ -876,6 +897,7 @@ export type Database = {
           payment_reference: string;
         }[];
       };
+      grant_reauth: { Args: { p_actor: string; p_ip: unknown; p_ua: string }; Returns: undefined };
       log_proof_access: {
         Args: { p_actor: string; p_ip: unknown; p_payment: string; p_ua: string };
         Returns: string;

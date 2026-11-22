@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="fr">
+  <body style="font-family: Arial, Helvetica, sans-serif; color: #1f2a26; max-width: 520px; margin: 0 auto; padding: 16px">
+    <h2 style="color: #17694a">LoyerCI : votre code de connexion</h2>
+    <p>Votre code à usage unique (valable 10 minutes) :</p>
+    <p style="font-size: 28px; font-weight: bold; letter-spacing: 6px; margin: 12px 0">{{ .Token }}</p>
+    <p>Ou touchez ce lien pour vous connecter :</p>
+    <p><a href="{{ .ConfirmationURL }}" style="color: #17694a">Se connecter à LoyerCI</a></p>
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0" />
+    <p style="font-size: 12px; color: #6b736f">
+      Vous n'avez rien demandé ? Ignorez ce message. LoyerCI ne vous demandera jamais votre code Mobile Money,
+      ni de payer sur un autre numéro.
+    </p>
+  </body>
+</html>

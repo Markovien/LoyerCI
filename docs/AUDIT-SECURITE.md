@@ -108,7 +108,7 @@ Chaque faille a été **démontrée** avant correction, puis le PoC a été rejo
 | Gravité | Risque | Où le traiter |
 |---|---|---|
 | 🟠 Élevée (avant production) | **Limiteur de débit en mémoire** : sans effet en serverless ou multi-instances (chaque instance a son compteur) | P4.1 (Redis) |
-| 🟠 Élevée (avant ouverture de P1) | **Ajout de coordonnées de réception sans ré-authentification ni alerte** : la carence ne protège que si le bailleur est **prévenu** pendant les 48 h | P1.6 (OTP < 5 min, alertes e-mail/SMS, annulation en un clic) — à livrer **avant** d'activer le paiement direct en production |
+| ✅ Traité en P1.6 | ~~Ajout de coordonnées de réception sans ré-authentification ni alerte~~ : ré-authentification par code **vérifiée en base** (usage unique, 5 min), bandeau d'alerte pendant la carence, annulation en un clic | Reste : **expédition** des alertes e-mail/SMS (file `private.outbox` prête), phase D |
 | 🟡 Moyenne | **Suppression des derniers maillons d'audit** indétectable depuis la base (PoC 6) | P4.4 : export de `private.audit_chain_head()` (ajoutée) vers un stockage WORM externe |
 | 🟡 Moyenne | **Vérification quotidienne de la chaîne sans alerte** : le résultat de `pg_cron` n'est lu par personne | P4.4 / P4.5 |
 | 🟢 Faible (résiduel) | **Preuves de paiement** : filtre PDF heuristique. ~~Métadonnées EXIF/GPS conservées~~ → **corrigé en P1.3** (retrait des blocs EXIF/XMP/IPTC des JPEG et des blocs texte des PNG, sans décodage) | Rendu des PDF hors du contexte applicatif (P4.7) |

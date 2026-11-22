@@ -247,6 +247,11 @@ otp_expiry = 600  # lien magique valable 10 minutes
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
+# LoyerCI : lien magique ET code à 6 chiffres (ré-authentification P1.6), en français.
+[auth.email.template.magic_link]
+subject = "LoyerCI : votre code de connexion"
+content_path = "./supabase/templates/magic_link.html"
+
 # Uncomment to customize email template
 # [auth.email.template.invite]
 # subject = "You have been invited"

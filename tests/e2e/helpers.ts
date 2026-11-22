@@ -79,3 +79,20 @@ export async function payableInvoice(tenantName: string): Promise<{ id: string; 
   }
   throw new Error("aucun avis payable trouvé");
 }
+
+/** Dernier code à 6 chiffres reçu par `email` après l'instant `since` (Mailpit). */
+export async function latestCode(email: string, since: number): Promise<string> {
+  for (let i = 0; i < 30; i++) {
+    const list = (await (await fetch(`${MAILPIT}/api/v1/messages`)).json()) as {
+      messages?: { ID: string; Created: string; To: { Address: string }[] }[];
+    };
+    const m = list.messages?.find((x) => x.To.some((t) => t.Address === email) && new Date(x.Created).getTime() >= since - 2000);
+    if (m) {
+      const msg = (await (await fetch(`${MAILPIT}/api/v1/message/${m.ID}`)).json()) as { HTML?: string };
+      const code = msg.HTML?.match(/>\s*(\d{6})\s*</)?.[1];
+      if (code) return code;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  throw new Error(`aucun code reçu pour ${email}`);
+}
