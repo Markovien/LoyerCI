@@ -107,7 +107,11 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 - PDF d'avis (montant, échéance, période, bien, bailleur, référence) **sans aucune coordonnée de paiement** (invariant n° 9) : « payez à votre bailleur comme d'habitude ou au guichet de l'agence ».
 - Avis signés comme les quittances (signature versionnée), code de vérification et QR vers `/verify` (notre domaine, jamais un QR PI-SPI). `/verify` étendu aux avis. Résultat visuel compréhensible sans lire (grand ✓ vert / ✗ rouge).
 ### D.2 Envoi des documents par e-mail ET WhatsApp (manuel au départ)
-- Démarrage avec une **adresse e-mail gratuite** et un **compte WhatsApp gratuit** ; l'envoi est fait depuis le back-office (file « à envoyer », un geste par message, document préparé). L'automatisation (SMTP transactionnel, WhatsApp Business API) viendra avec la croissance de l'activité.
+- **Décision du 22/11/2026 : chaque bailleur (ou son agence) envoie depuis SES propres comptes** (e-mail et WhatsApp gratuits, idéalement l'application WhatsApp Business), en un geste depuis le tableau de bord. LoyerCI prépare le message et le document ; aucune équipe LoyerCI n'a accès aux documents des bailleurs (pas de rôle « opérateur » transversal).
+- Pièce jointe : bouton « Partager » natif du téléphone (Web Share API avec fichier : PDF joint dans WhatsApp, à valider sur appareils du pilote) ; repli : message pré-rempli avec lien de téléchargement, et téléchargement du PDF pour le joindre à la main.
+- File « à envoyer ce mois-ci » : un bouton par document et par canal, envoi coché et tracé.
+- L'authenticité repose sur le document (signature, `/verify`), puisque l'expéditeur varie d'un bailleur à l'autre.
+- L'automatisation centralisée (e-mail transactionnel, WhatsApp Business API) viendra avec la croissance et remplacera le geste du bailleur sans changer le reste.
 - Consentement du locataire au canal WhatsApp recueilli et tracé à la création du bail.
 - Chaque message rappelle la règle fixe : jamais de numéro de paiement, jamais de demande de code Mobile Money.
 ### D.3 SMS de disponibilité + téléchargement après code à usage unique
@@ -200,13 +204,13 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 - **Avis** : jamais de coordonnée de paiement ; avis signés et vérifiables sur `/verify`.
 - **Sortie du parc** : suppression du compte locataire à M+3 ; documents conservés par le bailleur pendant la durée légale.
 - **Frais d'envoi** à la charge du bailleur, inclus dans son abonnement.
+- **Envoi des documents (22/11)** : par chaque bailleur depuis ses propres comptes, en un geste depuis le tableau de bord (voir D.2).
 
 ## Questions ouvertes (à trancher par le porteur de projet)
 
 1. Périmètre exact de l'interdiction du QR PI-SPI à distance : une affiche dans le hall d'un immeuble compte-t-elle comme « présence physique » ? (à confirmer auprès de la BCEAO ou d'un participant)
 2. Formats réels des n° de transaction et des SMS par opérateur (utiles au rapprochement automatique de la phase 5, plus à P1.5).
 3. Fournisseur SMS (D.3, P3.1) : coût et délivrabilité en Côte d'Ivoire.
-6. Envoi manuel des documents (D.2) : qui l'opère ? Chaque bailleur depuis ses propres comptes, ou l'équipe LoyerCI depuis une adresse et un compte WhatsApp uniques (ce qui donnerait à l'équipe un accès transversal aux documents de tous les bailleurs) ?
 7. Durée légale de conservation des quittances et paiements (OHADA, 10 ans ?) à faire confirmer par un juriste.
 4. Politique de prorata, de pénalités de retard (attention au cadre légal) et durées de conservation.
 5. Modèle économique de LoyerCI (abonnement bailleur ?), qui ne doit **jamais** reposer sur la détention des loyers.
