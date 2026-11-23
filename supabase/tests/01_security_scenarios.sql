@@ -1558,4 +1558,62 @@ do $$ begin
   assert exists (select 1 from public.audit_logs where action = 'consentement_whatsapp'), 'consentement non tracé';
 end $$;
 
+
+-- =============================================================================
+-- P2.4 — Avis (génération manuelle, annulation) et annulation de quittance
+-- =============================================================================
+set role service_role;
+do $$
+declare
+  n int;
+  v_inv uuid;
+  v_paid uuid;
+  v_rec public.receipts;
+begin
+  begin
+    perform public.generate_invoices_for_org('a0000000-0000-4000-8000-000000000005', 'c0000000-0000-4000-8000-000000000001', '2027-01-01', null, null);
+    raise exception 'ÉCHEC : un comptable génère des avis';
+  exception when insufficient_privilege then null;
+  end;
+  n := public.generate_invoices_for_org('a0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000001', '2027-01-01', null, null);
+  assert n >= 1, 'avis attendus';
+  assert public.generate_invoices_for_org('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', '2027-01-15', null, null) = 0, 'génération non idempotente';
+  assert not exists (select 1 from public.invoices where period = '2027-01-01' and org_id = 'c0000000-0000-4000-8000-000000000002'), 'avis générés pour une autre organisation';
+
+  v_inv := (select id from public.invoices where org_id = 'c0000000-0000-4000-8000-000000000001' and period = '2027-01-01' and amount_paid = 0
+              and not exists (select 1 from public.payments p where p.invoice_id = invoices.id) limit 1);
+  begin
+    perform public.cancel_invoice('a0000000-0000-4000-8000-000000000001', v_inv, 'non', null, null);
+    raise exception 'ÉCHEC : annulation sans motif';
+  exception when invalid_parameter_value then null;
+  end;
+  perform public.cancel_invoice('a0000000-0000-4000-8000-000000000002', v_inv, 'Bail résilié avant le mois', null, null);
+  assert (select status from public.invoices where id = v_inv) = 'annule', 'avis non annulé';
+
+  -- Quittance authentique (S4 a volontairement falsifié l'une d'elles en base)
+  v_paid := (select r.invoice_id from public.receipts r where r.status = 'valide' and r.org_id = 'c0000000-0000-4000-8000-000000000001'
+               and (select v.verdict from public.verify_receipt(r.id, left(r.signature, 16)) v) = 'authentique' limit 1);
+  begin
+    perform public.cancel_invoice('a0000000-0000-4000-8000-000000000001', v_paid, 'Erreur de saisie', null, null);
+    raise exception 'ÉCHEC : avis réglé annulé';
+  exception when raise_exception then null;
+  end;
+
+  select * into v_rec from public.receipts where invoice_id = v_paid;
+  begin
+    perform public.cancel_receipt('a0000000-0000-4000-8000-000000000005', v_rec.id, 'Chèque impayé', null, null);
+    raise exception 'ÉCHEC : un comptable annule une quittance';
+  exception when insufficient_privilege then null;
+  end;
+  perform public.cancel_receipt('a0000000-0000-4000-8000-000000000001', v_rec.id, 'Virement rejeté par la banque', '41.202.10.5', 'Chrome');
+  assert (select verdict from public.verify_receipt(v_rec.id, left(v_rec.signature, 16))) = 'annulee', 'quittance annulée non signalée par /verify';
+  begin
+    perform public.cancel_receipt('a0000000-0000-4000-8000-000000000001', v_rec.id, 'Encore une fois', null, null);
+    raise exception 'ÉCHEC : double annulation';
+  exception when raise_exception then null;
+  end;
+  raise notice 'OK  P2.4 avis : génération par organisation, idempotente ; annulation motivée d''un avis non réglé ; quittance annulée (owner) signalée par /verify';
+end $$;
+reset role;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

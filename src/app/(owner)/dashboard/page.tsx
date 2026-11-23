@@ -48,7 +48,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     supabase
       .from("invoices")
       .select(
-        "id, period, amount_due, amount_paid, due_date, status, payment_reference, tenants(full_name, phone, email), leases(properties(code, label, commune, quartier, type))",
+        "id, period, amount_due, amount_paid, due_date, status, payment_reference, tenants(full_name, phone, email), leases(properties(code, label, commune, quartier, type)), receipts(id, status)",
       )
       .eq("org_id", orgId)
       .or(`period.eq.${period},status.eq.en_retard`)
@@ -195,7 +195,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
       <DocumentsToSend items={docItems} periodLabel={formatPeriod(period)} />
 
-      <InvoiceList rows={invoices.data ?? []} period={period} appUrl={appUrl} landlordName={orgName} canRecordCash={canValidate} />
+      <InvoiceList
+        rows={(invoices.data ?? []).map((i) => ({
+          ...i,
+          receipts: i.receipts ? (Array.isArray(i.receipts) ? i.receipts : [i.receipts]) : null,
+        }))}
+        period={period}
+        appUrl={appUrl}
+        landlordName={orgName}
+        canRecordCash={canValidate}
+        role={membership.role}
+      />
 
       <footer className="flex items-center gap-2 pb-6 text-xs text-muted-foreground">
         <ShieldCheck className="size-4 text-primary" aria-hidden />

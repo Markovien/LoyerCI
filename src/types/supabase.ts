@@ -141,6 +141,7 @@ export type Database = {
         Row: {
           amount_due: number | null;
           amount_paid: number;
+          cancelled_reason: string | null;
           charges_amount: number;
           created_at: string;
           credit_amount: number;
@@ -159,6 +160,7 @@ export type Database = {
         Insert: {
           amount_due?: never;
           amount_paid?: number;
+          cancelled_reason?: string | null;
           charges_amount?: number;
           created_at?: string;
           credit_amount?: number;
@@ -176,6 +178,7 @@ export type Database = {
         Update: {
           amount_due?: never;
           amount_paid?: number;
+          cancelled_reason?: string | null;
           charges_amount?: number;
           created_at?: string;
           credit_amount?: number;
@@ -1064,8 +1067,16 @@ export type Database = {
           id: string;
         }[];
       };
+      cancel_invoice: {
+        Args: { p_actor: string; p_invoice: string; p_ip: unknown; p_reason: string; p_ua: string };
+        Returns: undefined;
+      };
       cancel_payout_account: {
         Args: { p_account: string; p_actor: string; p_ip: unknown; p_ua: string };
+        Returns: undefined;
+      };
+      cancel_receipt: {
+        Args: { p_actor: string; p_ip: unknown; p_reason: string; p_receipt: string; p_ua: string };
         Returns: undefined;
       };
       close_ended_leases: { Args: Record<PropertyKey, never>; Returns: number };
@@ -1176,6 +1187,10 @@ export type Database = {
           p_tx_id: string;
         };
         Returns: string;
+      };
+      generate_invoices_for_org: {
+        Args: { p_actor: string; p_ip: unknown; p_org: string; p_period: string; p_ua: string };
+        Returns: number;
       };
       generate_monthly_invoices: { Args: { p_period?: string }; Returns: number };
       get_direct_payment_instructions: {

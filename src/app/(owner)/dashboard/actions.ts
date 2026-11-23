@@ -1,4 +1,5 @@
 "use server";
+import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { getActionUser } from "@/lib/auth/session";
 import { dbErrorMessage, supabaseAdmin } from "@/lib/supabase/admin";
@@ -243,4 +244,71 @@ export async function markDocumentSent(input: unknown): Promise<ActionResult> {
   if (error) return { ok: false, message: dbErrorMessage(error) };
   revalidatePath("/dashboard");
   return { ok: true, message: "Envoi enregistré." };
+}
+
+/** P2.4 — Génération manuelle des avis du mois pour l'organisation (owner, manager). */
+export async function generateInvoices(period: unknown): Promise<ActionResult> {
+  const g = await guard("generate", 10);
+  if ("error" in g) return g.error!;
+  const p = typeof period === "string" && /^\d{4}-(0[1-9]|1[0-2])-01$/.test(period) ? period : null;
+  if (!p) return { ok: false, message: "Période invalide." };
+  const supabase = await createSupabaseServer();
+  const { data: m } = await supabase
+    .from("memberships")
+    .select("org_id")
+    .eq("user_id", g.user.id)
+    .in("role", ["owner", "manager"])
+    .limit(1)
+    .maybeSingle();
+  if (!m) return { ok: false, message: "Accès refusé." };
+  const { data, error } = await supabaseAdmin().rpc("generate_invoices_for_org", {
+    p_actor: g.user.id,
+    p_org: m.org_id,
+    p_period: p,
+    p_ip: g.ctx.ip,
+    p_ua: g.ctx.userAgent,
+  });
+  if (error) return { ok: false, message: dbErrorMessage(error) };
+  revalidatePath("/dashboard");
+  return { ok: true, message: data ? `${data} avis générés.` : "Tous les avis du mois existent déjà." };
+}
+
+const cancelSchema = z.object({ id: uuid, reason: z.string().trim().min(5, "Motif obligatoire (5 caractères minimum)").max(300) });
+
+/** P2.4 — Annulation motivée d'un avis non réglé (owner, manager). */
+export async function cancelInvoice(input: unknown): Promise<ActionResult> {
+  const g = await guard("cancel-invoice", 20);
+  if ("error" in g) return g.error!;
+  const raw = (input ?? {}) as { invoiceId?: unknown; reason?: unknown };
+  const parsed = cancelSchema.safeParse({ id: raw.invoiceId, reason: raw.reason });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Saisie invalide" };
+  const { error } = await supabaseAdmin().rpc("cancel_invoice", {
+    p_actor: g.user.id,
+    p_invoice: parsed.data.id,
+    p_reason: parsed.data.reason,
+    p_ip: g.ctx.ip,
+    p_ua: g.ctx.userAgent,
+  });
+  if (error) return { ok: false, message: dbErrorMessage(error) };
+  revalidatePath("/dashboard");
+  return { ok: true, message: "Avis annulé." };
+}
+
+/** P2.4 — Annulation motivée d'une quittance (propriétaire seul) ; /verify la signale annulée. */
+export async function cancelReceipt(input: unknown): Promise<ActionResult> {
+  const g = await guard("cancel-receipt", 10);
+  if ("error" in g) return g.error!;
+  const raw = (input ?? {}) as { receiptId?: unknown; reason?: unknown };
+  const parsed = cancelSchema.safeParse({ id: raw.receiptId, reason: raw.reason });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Saisie invalide" };
+  const { error } = await supabaseAdmin().rpc("cancel_receipt", {
+    p_actor: g.user.id,
+    p_receipt: parsed.data.id,
+    p_reason: parsed.data.reason,
+    p_ip: g.ctx.ip,
+    p_ua: g.ctx.userAgent,
+  });
+  if (error) return { ok: false, message: dbErrorMessage(error) };
+  revalidatePath("/dashboard");
+  return { ok: true, message: "Quittance annulée : elle est désormais signalée « annulée » à la vérification." };
 }

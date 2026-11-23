@@ -3,6 +3,7 @@ import { InvoiceStatusBadge } from "@/components/status-badge";
 import { formatDate, formatPeriod, formatXOF } from "@/lib/format";
 import type { InvoiceRow } from "@/types/database";
 import { ShareActions } from "./share-actions";
+import { GenerateInvoicesButton, InvoiceAdmin } from "./invoice-admin";
 
 const ORDER = { en_retard: 0, partiel: 1, a_payer: 2, paye: 3, annule: 4 } as const;
 
@@ -12,21 +13,22 @@ export function InvoiceList({
   appUrl,
   landlordName,
   canRecordCash,
+  role,
 }: {
   rows: InvoiceRow[];
   period: string;
   appUrl: string;
   landlordName: string;
   canRecordCash: boolean;
+  role: "owner" | "manager" | "accountant";
 }) {
   const sorted = [...rows].sort((a, b) => ORDER[a.status] - ORDER[b.status] || a.due_date.localeCompare(b.due_date));
   return (
     <Card>
       <CardHeader>
         <CardTitle>Avis d&apos;échéance — {formatPeriod(period)}</CardTitle>
-        <CardDescription>
-          Retards des mois précédents inclus. Partagez l&apos;avis en un clic ; le lien de paiement est personnel.
-        </CardDescription>
+        <CardDescription>Retards des mois précédents inclus.</CardDescription>
+        {(role === "owner" || role === "manager") && <GenerateInvoicesButton period={period} />}
       </CardHeader>
       <CardContent className="p-0 sm:p-0">
         {sorted.length === 0 ? (
@@ -83,6 +85,12 @@ export function InvoiceList({
                       }}
                     />
                   )}
+                  <InvoiceAdmin
+                    invoiceId={inv.id}
+                    receiptId={inv.receipts?.find((r) => r.status === "valide")?.id ?? null}
+                    canCancelInvoice={(role === "owner" || role === "manager") && inv.status !== "annule" && inv.amount_paid === 0}
+                    canCancelReceipt={role === "owner"}
+                  />
                 </li>
               );
             })}

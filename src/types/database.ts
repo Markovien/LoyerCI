@@ -32,6 +32,7 @@ export interface InvoiceRow {
   payment_reference: string;
   tenants: { full_name: string; phone: string; email: string | null } | null;
   leases: { properties: { code: string; label: string; commune: string; quartier: string | null; type: PropertyType } | null } | null;
+  receipts: { id: string; status: "valide" | "annulee" }[] | null;
 }
 
 export interface TenantInvoiceRow {
