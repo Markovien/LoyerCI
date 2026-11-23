@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 const ITEMS = [
   { href: "/dashboard", label: "Tableau de bord" },
   { href: "/dashboard/biens", label: "Biens" },
+  { href: "/dashboard/locataires", label: "Locataires" },
 ] as const;
 
 /** Navigation principale de l'espace bailleur (mobile d'abord : défilement horizontal). */

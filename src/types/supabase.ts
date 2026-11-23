@@ -879,6 +879,61 @@ export type Database = {
           },
         ];
       };
+      tenant_invitations: {
+        Row: {
+          consumed_at: string | null;
+          consumed_by: string | null;
+          created_at: string;
+          created_by: string;
+          expires_at: string;
+          id: string;
+          org_id: string;
+          revoked_at: string | null;
+          tenant_id: string;
+          token_hash: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          consumed_at?: string | null;
+          consumed_by?: string | null;
+          created_at?: string;
+          created_by: string;
+          expires_at?: string;
+          id?: string;
+          org_id: string;
+          revoked_at?: string | null;
+          tenant_id: string;
+          token_hash: string;
+        };
+        Update: {
+          consumed_at?: string | null;
+          consumed_by?: string | null;
+          created_at?: string;
+          created_by?: string;
+          expires_at?: string;
+          id?: string;
+          org_id?: string;
+          revoked_at?: string | null;
+          tenant_id?: string;
+          token_hash?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "tenant_invitations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tenant_invitations_tenant_id_org_id_fkey";
+            columns: ["tenant_id", "org_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id", "org_id"];
+          },
+        ];
+      };
       tenants: {
         Row: {
           created_at: string;
@@ -960,6 +1015,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      accept_invitation: {
+        Args: { p_ip: unknown; p_token_hash: string; p_ua: string; p_user: string };
+        Returns: string;
+      };
       add_payout_account: {
         Args: {
           p_actor: string;
@@ -1067,6 +1126,28 @@ export type Database = {
         };
         Returns: string;
       };
+      create_tenant: {
+        Args: {
+          p_actor: string;
+          p_email: string;
+          p_full_name: string;
+          p_ip: unknown;
+          p_org: string;
+          p_phone: string;
+          p_ua: string;
+        };
+        Returns: string;
+      };
+      create_tenant_invitation: {
+        Args: {
+          p_actor: string;
+          p_ip: unknown;
+          p_tenant: string;
+          p_token_hash: string;
+          p_ua: string;
+        };
+        Returns: string;
+      };
       dashboard_kpis: {
         Args: { p_month: string; p_org: string };
         Returns: {
@@ -1103,6 +1184,16 @@ export type Database = {
           payment_link_url: string;
           payment_reference: string;
           pispi_alias: string;
+        }[];
+      };
+      get_invitation: {
+        Args: { p_token_hash: string };
+        Returns: {
+          expires_at: string;
+          landlord_name: string;
+          phone_hint: string;
+          status: string;
+          tenant_masked: string;
         }[];
       };
       get_transfer_instructions: {
@@ -1254,6 +1345,10 @@ export type Database = {
         };
         Returns: string;
       };
+      unlink_tenant_account: {
+        Args: { p_actor: string; p_ip: unknown; p_tenant: string; p_ua: string };
+        Returns: undefined;
+      };
       update_property: {
         Args: {
           p_actor: string;
@@ -1266,6 +1361,18 @@ export type Database = {
           p_property: string;
           p_quartier: string;
           p_type: Database["public"]["Enums"]["property_type"];
+          p_ua: string;
+        };
+        Returns: undefined;
+      };
+      update_tenant: {
+        Args: {
+          p_actor: string;
+          p_email: string;
+          p_full_name: string;
+          p_ip: unknown;
+          p_phone: string;
+          p_tenant: string;
           p_ua: string;
         };
         Returns: undefined;

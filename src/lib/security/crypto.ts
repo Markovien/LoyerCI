@@ -45,3 +45,9 @@ export function verifyTimestampedSignature(
 export function newTransactionId(prefix = "LCI"): string {
   return `${prefix}${Date.now().toString(36)}${randomBytes(8).toString("hex")}`.toUpperCase();
 }
+
+/** Jeton d'invitation : 32 octets aléatoires (base64url, 43 caractères). Seule son empreinte est stockée. */
+export function newInvitationToken(): { token: string; hash: string } {
+  const token = randomBytes(32).toString("base64url");
+  return { token, hash: sha256Hex(token) };
+}

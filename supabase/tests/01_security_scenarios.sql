@@ -1381,4 +1381,88 @@ do $$ begin
   assert exists (select 1 from public.audit_logs where action = 'bien_cree' and host(ip) = '41.202.10.8'), 'création non tracée';
 end $$;
 
+
+-- =============================================================================
+-- P2.2 — Locataires et invitation
+-- =============================================================================
+insert into auth.users (id, email) values ('a0000000-0000-4000-8000-0000000000e1', 'nouveau.locataire@example.ci'),
+                                           ('a0000000-0000-4000-8000-0000000000e2', 'intrus@example.ci');
+set role service_role;
+do $$
+declare
+  t uuid;
+  h1 text := encode(extensions.digest('jeton-1', 'sha256'), 'hex');
+  h2 text := encode(extensions.digest('jeton-2', 'sha256'), 'hex');
+  r record;
+begin
+  begin
+    perform public.create_tenant('a0000000-0000-4000-8000-000000000005', 'c0000000-0000-4000-8000-000000000001', 'X Y', '2250707000999', null, null, null);
+    raise exception 'ÉCHEC : un comptable crée un locataire';
+  exception when insufficient_privilege then null;
+  end;
+  t := public.create_tenant('a0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000001',
+         'Diabaté Awa', '2250707000999', ' Awa.D@Example.CI ', '41.202.10.9', 'Chrome');
+  assert (select email from public.tenants where id = t) = 'awa.d@example.ci', 'e-mail normalisé';
+  begin
+    perform public.create_tenant('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 'Doublon', '2250707000999', null, null, null);
+    raise exception 'ÉCHEC : numéro en double';
+  exception when raise_exception then null;
+  end;
+
+  -- Invitation : la seconde révoque la première
+  perform public.create_tenant_invitation('a0000000-0000-4000-8000-000000000001', t, h1, null, null);
+  perform public.create_tenant_invitation('a0000000-0000-4000-8000-000000000001', t, h2, null, null);
+  select * into r from public.get_invitation(h1);
+  assert r.status = 'revoquee', 'première invitation non révoquée : ' || r.status;
+  select * into r from public.get_invitation(h2);
+  assert r.status = 'valide' and r.tenant_masked = 'Di***** A.' and r.phone_hint = '•••• 0999' and r.landlord_name = 'Akwaba Immobilier', 'lecture publique';
+  select * into r from public.get_invitation(encode(extensions.digest('inconnu', 'sha256'), 'hex'));
+  assert r.status = 'invalide' and r.landlord_name is null, 'jeton inconnu';
+
+  begin
+    perform public.accept_invitation(h1, 'a0000000-0000-4000-8000-0000000000e2', null, null);
+    raise exception 'ÉCHEC : invitation révoquée acceptée';
+  exception when raise_exception then null;
+  end;
+  perform public.accept_invitation(h2, 'a0000000-0000-4000-8000-0000000000e1', '41.66.3.3', 'Android');
+  assert (select user_id from public.tenants where id = t) = 'a0000000-0000-4000-8000-0000000000e1', 'compte non rattaché';
+  begin
+    perform public.accept_invitation(h2, 'a0000000-0000-4000-8000-0000000000e2', null, null);
+    raise exception 'ÉCHEC : invitation réutilisée';
+  exception when raise_exception then null;
+  end;
+  begin
+    perform public.create_tenant_invitation('a0000000-0000-4000-8000-000000000001', t, encode(extensions.digest('jeton-3', 'sha256'), 'hex'), null, null);
+    raise exception 'ÉCHEC : invitation pour un locataire déjà rattaché';
+  exception when raise_exception then null;
+  end;
+  -- Expiration
+  perform public.unlink_tenant_account('a0000000-0000-4000-8000-000000000002', t, null, null);
+  assert (select user_id from public.tenants where id = t) is null, 'compte non délié';
+  perform public.create_tenant_invitation('a0000000-0000-4000-8000-000000000001', t, encode(extensions.digest('jeton-4', 'sha256'), 'hex'), null, null);
+  raise notice 'OK  P2.2 locataires : owner/manager, numéro unique, invitation unique (révoque la précédente), usage unique, rattachement puis déliaison';
+end $$;
+reset role;
+update public.tenant_invitations set expires_at = now() - interval '1 minute' where token_hash = encode(extensions.digest('jeton-4', 'sha256'), 'hex');
+set role service_role;
+do $$
+declare r record;
+begin
+  select * into r from public.get_invitation(encode(extensions.digest('jeton-4', 'sha256'), 'hex'));
+  assert r.status = 'expiree', 'invitation expirée non signalée : ' || r.status;
+  begin
+    perform public.accept_invitation(encode(extensions.digest('jeton-4', 'sha256'), 'hex'), 'a0000000-0000-4000-8000-0000000000e2', null, null);
+    raise exception 'ÉCHEC : invitation expirée acceptée';
+  exception when raise_exception then null;
+  end;
+  raise notice 'OK  P2.2 invitation expirée : signalée et refusée';
+end $$;
+reset role;
+do $$ begin
+  assert not has_column_privilege('authenticated', 'public.tenant_invitations', 'token_hash', 'select'), 'empreinte du jeton lisible';
+  assert exists (select 1 from public.audit_logs where action = 'locataire_lie' and host(ip) = '41.66.3.3'), 'rattachement non tracé';
+  assert exists (select 1 from public.audit_logs where action = 'locataire_delie'), 'déliaison non tracée';
+  assert not exists (select 1 from public.audit_logs where action = 'locataire_cree' and metadata::text like '%0707000999%'), 'numéro en clair dans l''audit';
+end $$;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

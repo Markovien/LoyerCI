@@ -241,3 +241,20 @@ export const propertySchema = z.object({
   quartier: safeText(80).optional(),
   address: safeText(200).optional(),
 });
+
+/** Fiche locataire (P2.2). Aucune pièce d'identité. */
+export const tenantSchema = z.object({
+  fullName: safeText(120).pipe(z.string().min(2, "Indiquez le nom du locataire")),
+  phone: phoneCI,
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(200)
+    .optional()
+    .transform((v) => (v ? v : undefined))
+    .pipe(z.email({ error: "Adresse e-mail invalide" }).optional()),
+});
+
+/** Jeton d'invitation (base64url, 32 octets). */
+export const invitationTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/, "Lien d'invitation invalide");
