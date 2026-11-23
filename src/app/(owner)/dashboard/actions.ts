@@ -1,7 +1,7 @@
 "use server";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { getActionUser } from "@/lib/auth/session";
+import { activeMembership, getActionUser } from "@/lib/auth/session";
 import { dbErrorMessage, supabaseAdmin } from "@/lib/supabase/admin";
 import { requestContext } from "@/lib/security/request-context";
 import { limit } from "@/lib/security/rate-limit";
@@ -252,14 +252,8 @@ export async function generateInvoices(period: unknown): Promise<ActionResult> {
   if ("error" in g) return g.error!;
   const p = typeof period === "string" && /^\d{4}-(0[1-9]|1[0-2])-01$/.test(period) ? period : null;
   if (!p) return { ok: false, message: "Période invalide." };
-  const supabase = await createSupabaseServer();
-  const { data: m } = await supabase
-    .from("memberships")
-    .select("org_id")
-    .eq("user_id", g.user.id)
-    .in("role", ["owner", "manager"])
-    .limit(1)
-    .maybeSingle();
+  // Organisation ACTIVE (et non la première adhésion trouvée), revérifiée en base.
+  const m = await activeMembership(await createSupabaseServer(), g.user.id, ["owner", "manager"]);
   if (!m) return { ok: false, message: "Accès refusé." };
   const { data, error } = await supabaseAdmin().rpc("generate_invoices_for_org", {
     p_actor: g.user.id,

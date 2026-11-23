@@ -284,3 +284,15 @@ export const terminateLeaseSchema = z.object({
   endDate: z.iso.date({ error: "Date de fin invalide" }),
   reason: safeText(300).pipe(z.string().min(3, "Indiquez le motif")),
 });
+
+/** Membre de l'organisation (P2.5). */
+export const memberSchema = z.object({
+  orgId: uuid,
+  fullName: safeText(120).pipe(z.string().min(2, "Indiquez le nom")),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .pipe(z.email({ error: "Adresse e-mail invalide" }).max(200)),
+  role: z.enum(["owner", "manager", "accountant"]),
+});

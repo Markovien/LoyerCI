@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { activeMembership } from "@/lib/auth/session";
 import { limit } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
@@ -22,14 +23,7 @@ export async function GET(req: NextRequest) {
   if (!auth.user) return new NextResponse("Non authentifié", { status: 401 });
   if (!limit(`usage-csv:${auth.user.id}`, 10, 60_000).ok) return new NextResponse("Trop de requêtes", { status: 429 });
 
-  const { data: m } = await supabase
-    .from("memberships")
-    .select("org_id, role")
-    .eq("user_id", auth.user.id)
-    .in("role", ["owner", "accountant"])
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
+  const m = await activeMembership(supabase, auth.user.id, ["owner", "accountant"]);
   if (!m) return new NextResponse("Accès refusé", { status: 403 });
 
   const start = new Date(`${mois}-01T00:00:00Z`);

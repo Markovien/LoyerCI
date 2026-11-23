@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Send, Settings, ShieldCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, Send, Settings, ShieldCheck, Users } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { PendingAccountsBanner } from "./_components/pending-accounts-banner";
 import { DocumentsToSend, type DocumentItem } from "./_components/documents-to-send";
 import { toAccountView } from "./parametres/paiements/types";
 import { RealtimeRefresh } from "./_components/realtime-refresh";
+import { OrgSwitcher } from "./_components/org-switcher";
 
 export const metadata: Metadata = { title: "Tableau de bord" };
 
@@ -34,9 +35,9 @@ function shiftMonth(period: string, delta: number) {
   return d.toISOString().slice(0, 7);
 }
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ org?: string; mois?: string }> }) {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ mois?: string }> }) {
   const sp = await searchParams;
-  const { supabase, membership } = await requireOrgMember(sp.org);
+  const { supabase, membership, memberships } = await requireOrgMember();
   const orgId = membership.org_id;
   const period = /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.mois ?? "") ? `${sp.mois}-01` : currentPeriod();
   const canValidate = membership.role === "owner" || membership.role === "accountant";
@@ -158,9 +159,22 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               <span className="hidden sm:inline">Réception des fonds</span>
             </Link>
           )}
-          <span className="hidden text-muted-foreground sm:inline">
-            {orgName} · {roleLabel}
-          </span>
+          {membership.role === "owner" && (
+            <Link href="/dashboard/parametres/membres" className="inline-flex items-center gap-1 text-muted-foreground hover:underline">
+              <Users className="size-4" aria-hidden />
+              <span className="hidden sm:inline">Équipe</span>
+            </Link>
+          )}
+          {memberships.length > 1 ? (
+            <OrgSwitcher
+              current={orgId}
+              orgs={memberships.map((m) => ({ id: m.org_id, label: m.organizations?.name ?? "Organisation" }))}
+            />
+          ) : (
+            <span className="hidden text-muted-foreground sm:inline">
+              {orgName} · {roleLabel}
+            </span>
+          )}
         </div>
       </header>
       <DashboardNav current="/dashboard" />

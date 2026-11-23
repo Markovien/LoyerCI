@@ -137,11 +137,12 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 - Consentement du locataire au canal WhatsApp recueilli et tracé à la création du bail (reporté de D.2).
 - Résiliation immédiate ou planifiée (clôture automatique quotidienne), messages légaux explicites (loi n° 2019-576).
 
-### P2.4 Avis d'échéance
+### P2.4 Avis d'échéance (fait le 23/11/2026)
 - Génération manuelle « Générer les avis du mois » (`owner`/`manager`), annulation d'un avis avec motif (nouvelle fonction ; statut `annule` ; jamais de suppression).
 - Annulation d'une quittance (`owner` uniquement, motif obligatoire) : le trigger d'immuabilité l'autorise déjà ; ajouter la fonction et l'audit.
-### P2.5 Membres et rôles
+### P2.5 Membres et rôles (fait le 23/11/2026)
 - Invitation de gestionnaires et comptables, changement de rôle, retrait (au moins un `owner` doit rester). Sélecteur d'organisation si l'utilisateur en a plusieurs.
+- Réalisé : `dashboard/parametres/membres` (propriétaire). Ajout par e-mail (compte créé si besoin, lien de connexion envoyé ; aucune inscription publique, D1). Lignes `owner` verrouillées (`FOR UPDATE`) : deux rétrogradations simultanées ne peuvent pas vider l'organisation de ses propriétaires (test de concurrence). Organisation active portée par un cookie `httpOnly` revérifié à chaque requête, **seule** source pour les pages comme pour les actions (le paramètre d'URL `?org=` est abandonné).
 ### P2.6 Journal d'audit consultable
 - `dashboard/audit` (`owner`) : filtrage par action, période et acteur ; export CSV ; indicateur d'intégrité de la chaîne (`private.verify_audit_chain()` via une fonction exposée au rôle `owner`).
 

@@ -13,9 +13,8 @@ import { PropertyForm } from "./property-form";
 export const metadata: Metadata = { title: "Biens", robots: { index: false } };
 
 /** P2.1 — Parc immobilier de l'organisation (lecture RLS ; écriture owner/manager). */
-export default async function PropertiesPage({ searchParams }: { searchParams: Promise<{ org?: string }> }) {
-  const sp = await searchParams;
-  const { supabase, membership } = await requireOrgMember(sp.org);
+export default async function PropertiesPage() {
+  const { supabase, membership } = await requireOrgMember();
   const canEdit = membership.role === "owner" || membership.role === "manager";
   const { data } = await supabase
     .from("properties")

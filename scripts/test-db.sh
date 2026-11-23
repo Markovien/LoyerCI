@@ -59,3 +59,19 @@ if [[ "$RESULTS" == "deja_traite valide " && "$STATE" == "450000/paye/1" ]]; the
 else
   echo "  ÉCHEC concurrence validation : [$RESULTS] état=$STATE"; exit 1
 fi
+
+# --- Concurrence : deux propriétaires se rétrogradent l'un l'autre en même temps --------
+echo "→ test de concurrence (2 rétrogradations croisées de propriétaires)"
+"${PSQL[@]}" -c "insert into auth.users (id, email) values ('a0000000-0000-4000-8000-0000000000c2', 'second.proprio@example.ci');
+  insert into public.memberships (org_id, user_id, role) values ('c0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-0000000000c2', 'owner');" >/dev/null
+D1="set role service_role; select public.change_member_role('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-0000000000c2', 'manager', null, null);"
+D2="set role service_role; select public.change_member_role('a0000000-0000-4000-8000-0000000000c2', 'c0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'manager', null, null);"
+"${PSQL[@]}" -At -c "$D1" > "$DATA/o1" 2>&1 &
+"${PSQL[@]}" -At -c "$D2" > "$DATA/o2" 2>&1 &
+wait || true
+OWNERS="$("${PSQL[@]}" -At -c "select count(*) from public.memberships where org_id = 'c0000000-0000-4000-8000-000000000001' and role = 'owner'")"
+if [[ "$OWNERS" == "1" ]]; then
+  echo "  OK  concurrence : un seul propriétaire rétrogradé, il en reste $OWNERS"
+else
+  echo "  ÉCHEC concurrence propriétaires : $OWNERS propriétaire(s) restant(s)"; cat "$DATA/o1" "$DATA/o2"; exit 1
+fi

@@ -1616,4 +1616,66 @@ begin
 end $$;
 reset role;
 
+
+-- =============================================================================
+-- P2.5 — Membres et rôles
+-- =============================================================================
+insert into auth.users (id, email) values ('a0000000-0000-4000-8000-0000000000f1', 'nouvelle.gestionnaire@example.ci');
+set role service_role;
+do $$
+declare
+  v_org constant uuid := 'c0000000-0000-4000-8000-000000000001';
+  v_owner constant uuid := 'a0000000-0000-4000-8000-000000000001';
+  v_new constant uuid := 'a0000000-0000-4000-8000-0000000000f1';
+begin
+  assert public.find_user_id_by_email(' Nouvelle.Gestionnaire@Example.CI ') = v_new, 'recherche par e-mail';
+  begin
+    perform public.add_member('a0000000-0000-4000-8000-000000000002', v_org, v_new, 'Konan Ama', 'manager', null, null);
+    raise exception 'ÉCHEC : un gestionnaire ajoute un membre';
+  exception when insufficient_privilege then null;
+  end;
+  perform public.add_member(v_owner, v_org, v_new, 'Konan Ama', 'manager', '41.202.10.5', 'Chrome');
+  begin
+    perform public.add_member(v_owner, v_org, v_new, 'Konan Ama', 'accountant', null, null);
+    raise exception 'ÉCHEC : membre ajouté deux fois';
+  exception when raise_exception then null;
+  end;
+  perform public.change_member_role(v_owner, v_org, v_new, 'accountant', null, null);
+  assert (select role from public.memberships where org_id = v_org and user_id = v_new) = 'accountant', 'rôle non modifié';
+
+  -- Dernier propriétaire : ni rétrogradation ni retrait
+  begin
+    perform public.change_member_role(v_owner, v_org, v_owner, 'manager', null, null);
+    raise exception 'ÉCHEC : dernier propriétaire rétrogradé';
+  exception when raise_exception then null;
+  end;
+  begin
+    perform public.remove_member(v_owner, v_org, v_owner, null, null);
+    raise exception 'ÉCHEC : dernier propriétaire retiré';
+  exception when raise_exception then null;
+  end;
+  -- Avec un second propriétaire, la rétrogradation devient possible
+  perform public.change_member_role(v_owner, v_org, v_new, 'owner', null, null);
+  perform public.change_member_role(v_new, v_org, v_new, 'manager', null, null); -- se rétrograde lui-même
+  assert (select count(*) from public.memberships where org_id = v_org and role = 'owner') = 1, 'un seul propriétaire attendu';
+
+  perform public.remove_member(v_owner, v_org, v_new, null, null);
+  assert not exists (select 1 from public.memberships where org_id = v_org and user_id = v_new), 'membre non retiré';
+  raise notice 'OK  P2.5 membres : propriétaire seul, pas de doublon, rôle modifié, au moins un propriétaire toujours, retrait';
+end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-0000000000f1';
+do $$ begin
+  assert (select count(*) from public.invoices) = 0, 'un membre retiré lit encore les avis';
+  assert (select count(*) from public.memberships) = 0, 'un membre retiré voit encore l''organisation';
+  raise notice 'OK  P2.5 un membre retiré perd immédiatement tout accès (RLS)';
+end $$;
+reset role;
+do $$ begin
+  assert not has_function_privilege('authenticated', 'public.find_user_id_by_email(text)', 'execute'), 'recherche de compte exposée';
+  assert exists (select 1 from public.audit_logs where action = 'membre_role_modifie' and metadata ->> 'avant' = 'manager' and metadata ->> 'apres' = 'accountant'), 'changement de rôle non tracé';
+end $$;
+
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

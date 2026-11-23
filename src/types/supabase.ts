@@ -1028,6 +1028,18 @@ export type Database = {
         Args: { p_ip: unknown; p_token_hash: string; p_ua: string; p_user: string };
         Returns: string;
       };
+      add_member: {
+        Args: {
+          p_actor: string;
+          p_full_name: string;
+          p_ip: unknown;
+          p_org: string;
+          p_role: Database["public"]["Enums"]["member_role"];
+          p_ua: string;
+          p_user: string;
+        };
+        Returns: undefined;
+      };
       add_payout_account: {
         Args: {
           p_actor: string;
@@ -1067,6 +1079,15 @@ export type Database = {
           id: string;
         }[];
       };
+      audit_integrity: {
+        Args: { p_actor: string; p_org: string };
+        Returns: {
+          checked_at: string;
+          head_seq: number;
+          ok: boolean;
+          org_rows: number;
+        }[];
+      };
       cancel_invoice: {
         Args: { p_actor: string; p_invoice: string; p_ip: unknown; p_reason: string; p_ua: string };
         Returns: undefined;
@@ -1077,6 +1098,17 @@ export type Database = {
       };
       cancel_receipt: {
         Args: { p_actor: string; p_ip: unknown; p_reason: string; p_receipt: string; p_ua: string };
+        Returns: undefined;
+      };
+      change_member_role: {
+        Args: {
+          p_actor: string;
+          p_ip: unknown;
+          p_org: string;
+          p_role: Database["public"]["Enums"]["member_role"];
+          p_ua: string;
+          p_user: string;
+        };
         Returns: undefined;
       };
       close_ended_leases: { Args: Record<PropertyKey, never>; Returns: number };
@@ -1188,6 +1220,7 @@ export type Database = {
         };
         Returns: string;
       };
+      find_user_id_by_email: { Args: { p_email: string }; Returns: string };
       generate_invoices_for_org: {
         Args: { p_actor: string; p_ip: unknown; p_org: string; p_period: string; p_ua: string };
         Returns: number;
@@ -1233,6 +1266,17 @@ export type Database = {
       issue_notice: {
         Args: { p_actor: string; p_invoice: string; p_ip: unknown; p_ua: string };
         Returns: string;
+      };
+      log_audit_export: {
+        Args: {
+          p_actor: string;
+          p_filters: Json;
+          p_ip: unknown;
+          p_org: string;
+          p_rows: number;
+          p_ua: string;
+        };
+        Returns: undefined;
       };
       log_proof_access: {
         Args: { p_actor: string; p_ip: unknown; p_payment: string; p_ua: string };
@@ -1298,6 +1342,10 @@ export type Database = {
           p_ua: string;
         };
         Returns: string;
+      };
+      remove_member: {
+        Args: { p_actor: string; p_ip: unknown; p_org: string; p_ua: string; p_user: string };
+        Returns: undefined;
       };
       reserve_automated_message: {
         Args: {

@@ -12,9 +12,8 @@ import { TenantForm } from "./tenant-form";
 export const metadata: Metadata = { title: "Locataires", robots: { index: false } };
 
 /** P2.2 — Locataires de l'organisation (lecture RLS ; écriture owner/manager). */
-export default async function TenantsPage({ searchParams }: { searchParams: Promise<{ org?: string }> }) {
-  const sp = await searchParams;
-  const { supabase, membership } = await requireOrgMember(sp.org);
+export default async function TenantsPage() {
+  const { supabase, membership } = await requireOrgMember();
   const canEdit = membership.role === "owner" || membership.role === "manager";
   const { data } = await supabase
     .from("tenants")

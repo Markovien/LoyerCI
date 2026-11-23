@@ -22,7 +22,9 @@ test("génération manuelle des avis du mois puis annulation motivée d'un avis 
   await row.getByRole("button", { name: "Annuler l'avis" }).click();
   await row.getByLabel("Motif").fill("Bien en travaux ce mois-ci");
   await row.getByRole("button", { name: "Confirmer l'annulation" }).click();
-  await expect(row.getByRole("status")).toContainText("Avis annulé");
+  // L'avis annulé est retrié en fin de liste au rafraîchissement : on vérifie son badge
+  // (le message transitoire peut disparaître avec le rafraîchissement temps réel).
+  await expect(row.getByText("Annulé", { exact: true })).toBeVisible();
   const { data } = await admin().from("invoices").select("status, cancelled_reason").eq("id", inv!.id).single();
   expect(data).toEqual({ status: "annule", cancelled_reason: "Bien en travaux ce mois-ci" });
 });

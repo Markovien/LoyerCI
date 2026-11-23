@@ -20,9 +20,9 @@ const KIND: Record<string, string> = {
 };
 
 /** D.5 : consommation des envois de l'organisation (propriétaire, comptable). */
-export default async function UsagePage({ searchParams }: { searchParams: Promise<{ org?: string; mois?: string }> }) {
+export default async function UsagePage({ searchParams }: { searchParams: Promise<{ mois?: string }> }) {
   const sp = await searchParams;
-  const { supabase, membership } = await requireOrgMember(sp.org);
+  const { supabase, membership } = await requireOrgMember();
   if (membership.role !== "owner" && membership.role !== "accountant") redirect("/dashboard");
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.mois ?? "") ? `${sp.mois}-01` : currentPeriod();
 

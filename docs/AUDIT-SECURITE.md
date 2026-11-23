@@ -78,6 +78,10 @@ Chaque faille a été **démontrée** avant correction, puis le PoC a été rejo
 - **Problème :** masquer le numéro à l'affichage ne suffisait pas : la RLS laisse tout membre de l'organisation, gestionnaire compris, lire `payments` avec son jeton, donc le numéro complet.
 - **Correctif :** privilège de colonne. `payer_msisdn` est illisible pour `authenticated` ; seul `payer_msisdn_hint` (4 derniers chiffres) l'est. Vérifié aussi sur Realtime, qui retire la colonne des événements. Toute future colonne de `payments` est illisible par défaut.
 
+### 🟡 M9 — Action exécutée sur une autre organisation que celle affichée (constaté en P2.5)
+- **Problème :** les pages choisissaient l'organisation par `?org=` puis la première adhésion, tandis que certaines actions (`generateInvoices`, export des envois) prenaient la première adhésion ayant le bon rôle. Un membre de deux organisations pouvait générer les avis d'une organisation qu'il ne regardait pas.
+- **Correctif :** organisation active unique (cookie `httpOnly`, revérifié contre les adhésions réelles), partagée par les pages et les actions ; `activeMembership` refuse au lieu de se rabattre sur une autre organisation quand le rôle ne convient pas. Test e2e de bascule.
+
 ### 🟢 Faibles (corrigées)
 | # | Constat | Correctif |
 |---|---|---|
@@ -110,7 +114,7 @@ Chaque faille a été **démontrée** avant correction, puis le PoC a été rejo
 | 🟠 Élevée (avant production) | **Limiteur de débit en mémoire** : sans effet en serverless ou multi-instances (chaque instance a son compteur) | P4.1 (Redis) |
 | ✅ Traité en P1.6 | ~~Ajout de coordonnées de réception sans ré-authentification ni alerte~~ : ré-authentification par code **vérifiée en base** (usage unique, 5 min), bandeau d'alerte pendant la carence, annulation en un clic | Reste : **expédition** des alertes e-mail/SMS (file `private.outbox` prête), phase D |
 | 🟡 Moyenne | **Suppression des derniers maillons d'audit** indétectable depuis la base (PoC 6) | P4.4 : export de `private.audit_chain_head()` (ajoutée) vers un stockage WORM externe |
-| 🟡 Moyenne | **Vérification quotidienne de la chaîne sans alerte** : le résultat de `pg_cron` n'est lu par personne | P4.4 / P4.5 |
+| 🟡 Moyenne | **Vérification quotidienne de la chaîne sans alerte** : le résultat de `pg_cron` n'est lu par personne. | P4.4 / P4.5 |
 | 🟢 Faible (résiduel) | **Preuves de paiement** : filtre PDF heuristique. ~~Métadonnées EXIF/GPS conservées~~ → **corrigé en P1.3** (retrait des blocs EXIF/XMP/IPTC des JPEG et des blocs texte des PNG, sans décodage) | Rendu des PDF hors du contexte applicatif (P4.7) |
 | 🟢 Faible | `webhook_events.payload` conserve le numéro de téléphone payeur | P4.3 (purge à 90 jours) |
 | 🟢 Faible | Le locataire peut lire les UUID `declared_by`/`validated_by` de ses paiements | P0.2 (vue dédiée) |

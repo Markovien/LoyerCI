@@ -12,9 +12,8 @@ import { LeaseForm } from "./lease-form";
 export const metadata: Metadata = { title: "Baux", robots: { index: false } };
 
 /** P2.3 — Baux : création, avance, résiliation. */
-export default async function LeasesPage({ searchParams }: { searchParams: Promise<{ org?: string }> }) {
-  const sp = await searchParams;
-  const { supabase, membership } = await requireOrgMember(sp.org);
+export default async function LeasesPage() {
+  const { supabase, membership } = await requireOrgMember();
   const role = membership.role;
   const canEdit = role === "owner" || role === "manager";
   const [{ data: leases }, { data: properties }, { data: tenants }] = await Promise.all([

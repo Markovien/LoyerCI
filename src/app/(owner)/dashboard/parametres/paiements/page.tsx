@@ -14,9 +14,8 @@ import { toAccountView } from "./types";
 export const metadata: Metadata = { title: "Réception des fonds", robots: { index: false } };
 
 /** Paramètres de réception des fonds : propriétaire uniquement (invariant n° 7). */
-export default async function PaymentSettingsPage({ searchParams }: { searchParams: Promise<{ org?: string }> }) {
-  const sp = await searchParams;
-  const { supabase, membership } = await requireOrgMember(sp.org);
+export default async function PaymentSettingsPage() {
+  const { supabase, membership } = await requireOrgMember();
   if (membership.role !== "owner") redirect("/dashboard");
   const orgId = membership.org_id;
 
