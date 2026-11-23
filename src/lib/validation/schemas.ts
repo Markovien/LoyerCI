@@ -226,3 +226,18 @@ export const paymentSettingsSchema = z
 /** Document à envoyer par le bailleur (D.2). */
 export const documentRefSchema = z.object({ invoiceId: uuid, docType: z.enum(["avis", "quittance"]) });
 export const documentSentSchema = documentRefSchema.extend({ channel: z.enum(["partage", "whatsapp", "email", "telechargement"]) });
+
+/** Bien immobilier (P2.1). Contraintes revérifiées en base. */
+export const propertySchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .transform((v) => v.toUpperCase())
+    .pipe(z.string().regex(/^[A-Z0-9]{2,10}$/, "Code : 2 à 10 lettres ou chiffres, sans espace (ex. VCR01)")),
+  label: safeText(120).pipe(z.string().min(2, "Indiquez un libellé (ex. Villa Duplex 5 pièces)")),
+  type: z.enum(["appartement", "villa", "studio", "magasin", "bureau", "entrepot"]),
+  city: safeText(60).pipe(z.string().min(2, "Indiquez la ville")),
+  commune: safeText(60).pipe(z.string().min(2, "Indiquez la commune")),
+  quartier: safeText(80).optional(),
+  address: safeText(200).optional(),
+});

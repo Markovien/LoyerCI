@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Send, Settings, ShieldCheck } from "lucide-react";
 import { Brand } from "@/components/brand";
+import { DashboardNav } from "@/components/dashboard-nav";
 import { Button } from "@/components/ui/button";
 import { requireOrgMember } from "@/lib/auth/session";
 import { currentPeriod, formatPeriod } from "@/lib/format";
@@ -162,6 +163,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </span>
         </div>
       </header>
+      <DashboardNav current="/dashboard" />
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>

@@ -1329,4 +1329,56 @@ do $$ begin
 end $$;
 reset role;
 
+
+-- =============================================================================
+-- P2.1 — Biens
+-- =============================================================================
+set role service_role;
+do $$
+declare v uuid;
+begin
+  begin
+    perform public.create_property('a0000000-0000-4000-8000-000000000005', 'c0000000-0000-4000-8000-000000000001',
+      'APT40', 'Appartement', 'appartement', 'Abidjan', 'Koumassi', null, null, null, null);
+    raise exception 'ÉCHEC : un comptable crée un bien';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.create_property('b0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001',
+      'APT40', 'Appartement', 'appartement', 'Abidjan', 'Koumassi', null, null, null, null);
+    raise exception 'ÉCHEC : création dans une autre organisation';
+  exception when insufficient_privilege then null;
+  end;
+  v := public.create_property('a0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000001',
+    ' apt40 ', 'Appartement 2 pièces', 'appartement', '', 'Koumassi', 'Remblais', null, '41.202.10.8', 'Chrome');
+  assert (select code || '|' || city from public.properties where id = v) = 'APT40|Abidjan', 'normalisation';
+  begin
+    perform public.create_property('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001',
+      'APT40', 'Doublon', 'appartement', 'Abidjan', 'Koumassi', null, null, null, null);
+    raise exception 'ÉCHEC : code de bien en double';
+  exception when raise_exception then null;
+  end;
+  begin
+    perform public.create_property('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001',
+      'A B', 'Code invalide', 'appartement', 'Abidjan', 'Koumassi', null, null, null, null);
+    raise exception 'ÉCHEC : code de bien invalide';
+  exception when check_violation then null;
+  end;
+  perform public.update_property('a0000000-0000-4000-8000-000000000001', v, 'APT40', 'Appartement 3 pièces', 'appartement',
+    'Abidjan', 'Koumassi', 'Remblais', 'Rue 12', null, null);
+  begin
+    perform public.update_property('a0000000-0000-4000-8000-000000000005', v, 'APT40', 'X', 'appartement', 'Abidjan', 'Koumassi', null, null, null, null);
+    raise exception 'ÉCHEC : un comptable modifie un bien';
+  exception when insufficient_privilege then null;
+  end;
+  raise notice 'OK  P2.1 biens : owner/manager seulement, normalisation, code unique et valide';
+end $$;
+reset role;
+do $$ begin
+  assert exists (select 1 from public.audit_logs where action = 'bien_modifie'
+                  and metadata -> 'avant' ->> 'libelle' = 'Appartement 2 pièces' and metadata -> 'apres' ->> 'libelle' = 'Appartement 3 pièces'),
+    'modification de bien non tracée (avant/après)';
+  assert exists (select 1 from public.audit_logs where action = 'bien_cree' and host(ip) = '41.202.10.8'), 'création non tracée';
+end $$;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

@@ -1051,6 +1051,22 @@ export type Database = {
           transaction_id: string;
         }[];
       };
+      create_property: {
+        Args: {
+          p_actor: string;
+          p_address: string;
+          p_city: string;
+          p_code: string;
+          p_commune: string;
+          p_ip: unknown;
+          p_label: string;
+          p_org: string;
+          p_quartier: string;
+          p_type: Database["public"]["Enums"]["property_type"];
+          p_ua: string;
+        };
+        Returns: string;
+      };
       dashboard_kpis: {
         Args: { p_month: string; p_org: string };
         Returns: {
@@ -1237,6 +1253,22 @@ export type Database = {
           p_ua: string;
         };
         Returns: string;
+      };
+      update_property: {
+        Args: {
+          p_actor: string;
+          p_address: string;
+          p_city: string;
+          p_code: string;
+          p_commune: string;
+          p_ip: unknown;
+          p_label: string;
+          p_property: string;
+          p_quartier: string;
+          p_type: Database["public"]["Enums"]["property_type"];
+          p_ua: string;
+        };
+        Returns: undefined;
       };
       verify_notice: {
         Args: { p_code: string; p_id: string };
