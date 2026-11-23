@@ -34,30 +34,36 @@ export function ShareActions({
   return (
     <div className="flex flex-col gap-2 lg:items-end">
       <div className="flex flex-wrap gap-1.5 lg:justify-end">
-        <Button asChild size="sm" variant="whatsapp">
-          <a
-            href={whatsappLink(phone, text)}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`Envoyer l'avis par WhatsApp à ${notice.tenantName}`}
-          >
-            <MessageCircle />
-            WhatsApp
-          </a>
-        </Button>
-        <Button asChild size="sm" variant="outline">
-          <a href={smsLink(phone, text)} aria-label="Envoyer par SMS">
-            <MessageSquareText />
-            SMS
-          </a>
-        </Button>
-        {email && (
-          <Button asChild size="sm" variant="outline">
-            <a href={mailtoLink(email, `Avis d'échéance — ${formatPeriod(notice.period)}`, text)} aria-label="Envoyer par e-mail">
-              <Mail />
-              E-mail
-            </a>
-          </Button>
+        {/* Relances texte réservées aux loyers en retard ; les avis du mois partent par la
+            file « Documents à envoyer » (PDF signé + lien de vérification). */}
+        {notice.overdue && (
+          <>
+            <Button asChild size="sm" variant="whatsapp">
+              <a
+                href={whatsappLink(phone, text)}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Relancer ${notice.tenantName} par WhatsApp`}
+              >
+                <MessageCircle />
+                Relance WhatsApp
+              </a>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <a href={smsLink(phone, text)} aria-label="Relancer par SMS">
+                <MessageSquareText />
+                Relance SMS
+              </a>
+            </Button>
+            {email && (
+              <Button asChild size="sm" variant="outline">
+                <a href={mailtoLink(email, `Avis d'échéance — ${formatPeriod(notice.period)}`, text)} aria-label="Relancer par e-mail">
+                  <Mail />
+                  Relance e-mail
+                </a>
+              </Button>
+            )}
+          </>
         )}
         {canRecordCash && (
           <Button size="sm" variant="ghost" onClick={() => setCashOpen((o) => !o)} aria-expanded={cashOpen}>

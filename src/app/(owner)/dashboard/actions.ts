@@ -4,7 +4,20 @@ import { getActionUser } from "@/lib/auth/session";
 import { dbErrorMessage, supabaseAdmin } from "@/lib/supabase/admin";
 import { requestContext } from "@/lib/security/request-context";
 import { limit } from "@/lib/security/rate-limit";
-import { cashPaymentSchema, receivedPaymentSchema, reviewManualPaymentSchema, uuid } from "@/lib/validation/schemas";
+import {
+  cashPaymentSchema,
+  documentRefSchema,
+  documentSentSchema,
+  receivedPaymentSchema,
+  reviewManualPaymentSchema,
+  uuid,
+} from "@/lib/validation/schemas";
+import { createSupabaseServer } from "@/lib/supabase/server";
+import { serverEnv } from "@/lib/env";
+import { avisMessage, quittanceMessage } from "@/lib/documents/messages";
+import { noticeVerifyUrl } from "@/lib/documents/notice-pdf";
+import { verifyUrl as receiptVerifyUrl } from "@/lib/receipts/pdf";
+import { mailtoLink, whatsappLink } from "@/lib/whatsapp";
 
 export type ActionResult = { ok: boolean; message: string; url?: string };
 
@@ -118,4 +131,116 @@ export async function recordReceivedPayment(input: unknown): Promise<ActionResul
   if (error) return { ok: false, message: dbErrorMessage(error) };
   revalidatePath("/dashboard");
   return { ok: true, message: "Encaissement enregistré. La quittance est générée si l'avis est soldé." };
+}
+
+export type PreparedDocument =
+  | {
+      ok: true;
+      message: string;
+      fileName: string;
+      pdfPath: string;
+      text: string;
+      whatsappUrl: string | null;
+      mailtoUrl: string | null;
+    }
+  | { ok: false; message: string };
+
+/**
+ * D.2 — Prépare l'envoi d'un document par le bailleur depuis SES comptes : émet l'avis
+ * signé si besoin, puis renvoie le message (sans coordonnée de paiement, avec le lien de
+ * vérification), les liens WhatsApp / e-mail et le chemin du PDF. Rien n'est envoyé ici.
+ */
+export async function prepareDocument(input: unknown): Promise<PreparedDocument> {
+  const g = await guard("doc-prepare", 60);
+  if ("error" in g) return g.error! as PreparedDocument;
+  const parsed = documentRefSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Requête invalide." };
+  const { invoiceId, docType } = parsed.data;
+
+  // Lectures RLS : l'avis et le locataire doivent être visibles par ce membre.
+  const supabase = await createSupabaseServer();
+  const { data: inv } = await supabase
+    .from("invoices")
+    .select("id, period, amount_due, due_date, payment_reference, organizations(name), tenants(full_name, phone, email)")
+    .eq("id", invoiceId)
+    .maybeSingle();
+  if (!inv?.tenants) return { ok: false, message: "Avis introuvable." };
+  const appUrl = serverEnv().NEXT_PUBLIC_APP_URL;
+  const tenant = inv.tenants;
+  const landlord = inv.organizations?.name ?? "Votre bailleur";
+
+  let text: string;
+  let fileName: string;
+  let pdfPath: string;
+  let subject: string;
+  if (docType === "avis") {
+    const { data: noticeId, error } = await supabaseAdmin().rpc("issue_notice", {
+      p_actor: g.user.id,
+      p_invoice: inv.id,
+      p_ip: g.ctx.ip,
+      p_ua: g.ctx.userAgent,
+    });
+    if (error || !noticeId) return { ok: false, message: dbErrorMessage(error) };
+    const { data: n } = await supabase.from("notices").select("id, signature").eq("id", noticeId).maybeSingle();
+    if (!n) return { ok: false, message: "Avis indisponible." };
+    text = avisMessage({
+      tenantName: tenant.full_name,
+      landlordName: landlord,
+      period: inv.period,
+      amountDue: inv.amount_due,
+      dueDate: inv.due_date,
+      reference: inv.payment_reference,
+      verifyUrl: noticeVerifyUrl(appUrl, n),
+    });
+    fileName = `avis-${inv.payment_reference}.pdf`;
+    pdfPath = `/api/notices/${inv.id}/pdf`;
+    subject = `Avis d'échéance — ${inv.payment_reference}`;
+  } else {
+    const { data: r } = await supabase
+      .from("receipts")
+      .select("id, signature, receipt_number, amount, status")
+      .eq("invoice_id", inv.id)
+      .maybeSingle();
+    if (!r || r.status !== "valide") return { ok: false, message: "Aucune quittance valide pour cet avis." };
+    text = quittanceMessage({
+      tenantName: tenant.full_name,
+      landlordName: landlord,
+      period: inv.period,
+      amount: r.amount,
+      receiptNumber: r.receipt_number,
+      verifyUrl: receiptVerifyUrl(appUrl, r),
+    });
+    fileName = `quittance-${r.receipt_number}.pdf`;
+    pdfPath = `/api/receipts/${r.id}/pdf`;
+    subject = `Quittance de loyer — ${r.receipt_number}`;
+  }
+
+  return {
+    ok: true,
+    message: "Document prêt.",
+    text,
+    fileName,
+    pdfPath,
+    whatsappUrl: /^225\d{10}$/.test(tenant.phone) ? whatsappLink(tenant.phone, text) : null,
+    mailtoUrl: tenant.email ? mailtoLink(tenant.email, subject, text) : null,
+  };
+}
+
+/** D.2 — Trace l'envoi (canal choisi par le bailleur). */
+export async function markDocumentSent(input: unknown): Promise<ActionResult> {
+  const g = await guard("doc-sent", 60);
+  if ("error" in g) return g.error!;
+  const parsed = documentSentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Requête invalide." };
+  const { error } = await supabaseAdmin().rpc("mark_document_sent", {
+    p_actor: g.user.id,
+    p_invoice: parsed.data.invoiceId,
+    p_doc_type: parsed.data.docType,
+    p_channel: parsed.data.channel,
+    p_ip: g.ctx.ip,
+    p_ua: g.ctx.userAgent,
+  });
+  if (error) return { ok: false, message: dbErrorMessage(error) };
+  revalidatePath("/dashboard");
+  return { ok: true, message: "Envoi enregistré." };
 }

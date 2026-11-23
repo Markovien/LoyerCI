@@ -88,6 +88,55 @@ export type Database = {
           },
         ];
       };
+      document_deliveries: {
+        Row: {
+          channel: Database["public"]["Enums"]["delivery_channel"];
+          doc_type: Database["public"]["Enums"]["document_type"];
+          document_id: string;
+          id: number;
+          invoice_id: string;
+          org_id: string;
+          sent_at: string;
+          sent_by: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          channel: Database["public"]["Enums"]["delivery_channel"];
+          doc_type: Database["public"]["Enums"]["document_type"];
+          document_id: string;
+          id?: never;
+          invoice_id: string;
+          org_id: string;
+          sent_at?: string;
+          sent_by: string;
+        };
+        Update: {
+          channel?: Database["public"]["Enums"]["delivery_channel"];
+          doc_type?: Database["public"]["Enums"]["document_type"];
+          document_id?: string;
+          id?: never;
+          invoice_id?: string;
+          org_id?: string;
+          sent_at?: string;
+          sent_by?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "document_deliveries_invoice_id_org_id_fkey";
+            columns: ["invoice_id", "org_id"];
+            isOneToOne: false;
+            referencedRelation: "invoices";
+            referencedColumns: ["id", "org_id"];
+          },
+          {
+            foreignKeyName: "document_deliveries_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       invoices: {
         Row: {
           amount_due: number | null;
@@ -985,6 +1034,17 @@ export type Database = {
         Args: { p_actor: string; p_ip: unknown; p_payment: string; p_ua: string };
         Returns: string;
       };
+      mark_document_sent: {
+        Args: {
+          p_actor: string;
+          p_channel: Database["public"]["Enums"]["delivery_channel"];
+          p_doc_type: Database["public"]["Enums"]["document_type"];
+          p_invoice: string;
+          p_ip: unknown;
+          p_ua: string;
+        };
+        Returns: number;
+      };
       mark_overdue_invoices: { Args: Record<PropertyKey, never>; Returns: number };
       record_cash_payment: {
         Args: { p_actor: string; p_amount: number; p_invoice: string; p_ip: unknown; p_ua: string };
@@ -1104,6 +1164,8 @@ export type Database = {
       };
     };
     Enums: {
+      delivery_channel: "partage" | "whatsapp" | "email" | "sms" | "telechargement";
+      document_type: "avis" | "quittance";
       invoice_status: "a_payer" | "partiel" | "en_retard" | "paye" | "annule";
       lease_status: "actif" | "termine" | "resilie";
       lease_usage: "habitation" | "professionnel";
@@ -1230,6 +1292,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      delivery_channel: ["partage", "whatsapp", "email", "sms", "telechargement"],
+      document_type: ["avis", "quittance"],
       invoice_status: ["a_payer", "partiel", "en_retard", "paye", "annule"],
       lease_status: ["actif", "termine", "resilie"],
       lease_usage: ["habitation", "professionnel"],

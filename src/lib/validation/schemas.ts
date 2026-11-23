@@ -222,3 +222,7 @@ export const paymentSettingsSchema = z
     cashThreshold: z.coerce.number().int().min(0).max(100_000_000),
   })
   .refine((v) => v.direct || v.cinetpay || v.transfer, { message: "Gardez au moins un mode de paiement actif", path: ["direct"] });
+
+/** Document à envoyer par le bailleur (D.2). */
+export const documentRefSchema = z.object({ invoiceId: uuid, docType: z.enum(["avis", "quittance"]) });
+export const documentSentSchema = documentRefSchema.extend({ channel: z.enum(["partage", "whatsapp", "email", "telechargement"]) });

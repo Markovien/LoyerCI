@@ -10,6 +10,7 @@ import { KpiGrid } from "./_components/kpi-grid";
 import { InvoiceList } from "./_components/invoice-list";
 import { PendingPayments, type PendingPaymentView } from "./_components/pending-payments";
 import { PendingAccountsBanner } from "./_components/pending-accounts-banner";
+import { DocumentsToSend, type DocumentItem } from "./_components/documents-to-send";
 import { toAccountView } from "./parametres/paiements/types";
 import { RealtimeRefresh } from "./_components/realtime-refresh";
 
@@ -41,7 +42,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
   // Lectures avec le JWT de l'utilisateur : la RLS garantit le cloisonnement.
-  const [kpis, invoices, pending, carence] = await Promise.all([
+  const [kpis, invoices, pending, carence, docs] = await Promise.all([
     supabase.rpc("dashboard_kpis", { p_org: orgId, p_month: period }).single(),
     supabase
       .from("invoices")
@@ -72,6 +73,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           .is("revoked_at", null)
           .gt("activates_at", new Date().toISOString())
       : Promise.resolve({ data: [] }),
+    // D.2 : documents du mois (avis, quittances) et suivi des envois.
+    supabase
+      .from("invoices")
+      .select(
+        "id, period, status, tenants(full_name), receipts(id, receipt_number, status), document_deliveries(doc_type, channel, sent_at)",
+      )
+      .eq("org_id", orgId)
+      .eq("period", period)
+      .neq("status", "annule")
+      .order("due_date"),
   ]);
 
   // Vue minimale pour le composant client : aucun chemin de fichier, aucun numéro complet.
@@ -104,6 +115,26 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     ? await supabase.from("profiles").select("id, full_name").in("id", creatorIds)
     : { data: [] as { id: string; full_name: string }[] };
   const carenceViews = carenceRaw.map((a) => toAccountView(a, new Map((creators ?? []).map((c) => [c.id, c.full_name]))));
+
+  const docItems: DocumentItem[] = (docs.data ?? []).flatMap((d) => {
+    const tenantName = d.tenants?.full_name ?? "Locataire";
+    const sentOf = (t: "avis" | "quittance") =>
+      (d.document_deliveries ?? []).filter((x) => x.doc_type === t).map((x) => ({ channel: x.channel, sentAt: x.sent_at }));
+    const receipt = Array.isArray(d.receipts) ? d.receipts[0] : d.receipts;
+    const list: DocumentItem[] = [
+      { invoiceId: d.id, docType: "avis", tenantName, label: `Avis d'échéance de ${formatPeriod(d.period)}`, sent: sentOf("avis") },
+    ];
+    if (receipt && receipt.status === "valide") {
+      list.push({
+        invoiceId: d.id,
+        docType: "quittance",
+        tenantName,
+        label: `Quittance ${receipt.receipt_number}`,
+        sent: sentOf("quittance"),
+      });
+    }
+    return list;
+  });
 
   const orgName = membership.organizations?.name ?? "Mon organisation";
   const roleLabel = { owner: "Propriétaire", manager: "Gestionnaire", accountant: "Comptable" }[membership.role];
@@ -153,6 +184,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <PendingAccountsBanner accounts={carenceViews} canCancel={membership.role === "owner"} />
 
       {canValidate && <PendingPayments rows={pendingRows} role={membership.role} />}
+
+      <DocumentsToSend items={docItems} periodLabel={formatPeriod(period)} />
 
       <InvoiceList rows={invoices.data ?? []} period={period} appUrl={appUrl} landlordName={orgName} canRecordCash={canValidate} />
 

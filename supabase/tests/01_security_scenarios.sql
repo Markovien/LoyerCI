@@ -1159,4 +1159,53 @@ do $$ begin
 end $$;
 reset role;
 
+
+-- =============================================================================
+-- D.2 — Suivi des envois de documents
+-- =============================================================================
+set role service_role;
+do $$
+declare
+  v_inv uuid := (select invoice_id from public.notices limit 1);
+  v_paid uuid := (select invoice_id from public.receipts where status = 'valide' limit 1);
+  v_nonotice uuid := (select id from public.invoices i where not exists (select 1 from public.notices n where n.invoice_id = i.id)
+                        and i.org_id = 'c0000000-0000-4000-8000-000000000001' limit 1);
+begin
+  begin -- locataire : jamais
+    perform public.mark_document_sent('a0000000-0000-4000-8000-000000000003', v_inv, 'avis', 'whatsapp', null, null);
+    raise exception 'ÉCHEC : un locataire enregistre un envoi';
+  exception when insufficient_privilege then null;
+  end;
+  begin -- autre organisation
+    perform public.mark_document_sent('b0000000-0000-4000-8000-000000000001', v_inv, 'avis', 'whatsapp', null, null);
+    raise exception 'ÉCHEC : envoi enregistré par une autre organisation';
+  exception when insufficient_privilege then null;
+  end;
+  begin -- document non émis
+    perform public.mark_document_sent('a0000000-0000-4000-8000-000000000001', v_nonotice, 'avis', 'partage', null, null);
+    raise exception 'ÉCHEC : envoi d''un avis non émis';
+  exception when raise_exception then null;
+  end;
+  perform public.mark_document_sent('a0000000-0000-4000-8000-000000000002', v_inv, 'avis', 'whatsapp', '41.202.10.7', 'Android'); -- gestionnaire
+  perform public.mark_document_sent('a0000000-0000-4000-8000-000000000005', v_paid, 'quittance', 'partage', null, null);      -- comptable
+  raise notice 'OK  D.2 envois : membres de l''organisation seulement, document émis requis, avis et quittance';
+end $$;
+reset role;
+do $$ begin
+  assert (select count(*) from public.document_deliveries) = 2, 'deux envois attendus';
+  assert exists (select 1 from public.audit_logs where action = 'document_envoye' and metadata ->> 'canal' = 'whatsapp'), 'envoi non tracé';
+  begin
+    delete from public.document_deliveries;
+    raise exception 'ÉCHEC : trace d''envoi supprimable';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000003';
+do $$ begin
+  assert (select count(*) from public.document_deliveries) = 0, 'un locataire lit le suivi des envois';
+  raise notice 'OK  D.2 suivi : trace en ajout seul, auditée, invisible des locataires';
+end $$;
+reset role;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

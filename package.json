@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:db": "./scripts/test-db.sh",
     "seed": "tsx scripts/seed.ts",
-    "gen:types": "supabase gen types typescript --local --schema public > src/types/supabase.next.ts && oxfmt src/types/supabase.next.ts && mv src/types/supabase.next.ts src/types/supabase.ts",
+    "gen:types": "(supabase gen types typescript --local --schema public > src/types/supabase.next.ts && oxfmt src/types/supabase.next.ts && mv src/types/supabase.next.ts src/types/supabase.ts) || (rm -f src/types/supabase.next.ts; exit 1)",
     "lint": "oxlint --type-aware && node scripts/check-client-imports.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

@@ -112,7 +112,7 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 - File « à envoyer ce mois-ci » : un bouton par document et par canal, envoi coché et tracé.
 - L'authenticité repose sur le document (signature, `/verify`), puisque l'expéditeur varie d'un bailleur à l'autre.
 - L'automatisation centralisée (e-mail transactionnel, WhatsApp Business API) viendra avec la croissance et remplacera le geste du bailleur sans changer le reste.
-- Consentement du locataire au canal WhatsApp recueilli et tracé à la création du bail.
+- Consentement du locataire au canal WhatsApp recueilli et tracé à la création du bail : **reporté à P2.3** (le formulaire de bail n'existe pas encore).
 - Chaque message rappelle la règle fixe : jamais de numéro de paiement, jamais de demande de code Mobile Money.
 ### D.3 SMS de disponibilité + téléchargement après code à usage unique
 - SMS court **sans accents** (encodage GSM-7, 160 caractères) contenant l'essentiel (montant, période, n° de document, code de vérification) et un **lien de téléchargement**.
@@ -133,6 +133,7 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 ### P2.2 Locataires et invitation
 - Fiche locataire (sans pièce d'identité stockée). **Invitation** : lien à usage unique (jeton aléatoire haché en base, expiration 7 jours) envoyé par WhatsApp/SMS. À l'ouverture, création ou liaison du compte → `tenants.user_id`. Audit `locataire_invite`, `locataire_lie`.
 ### P2.3 Baux
+- Recueillir et tracer le **consentement du locataire au canal WhatsApp** (reporté de D.2).
 - Formulaire utilisant `create_lease` (plafonds légaux déjà en base : afficher le message de la loi n° 2019-576 en cas de refus). Résiliation (`bail_resilie`), fin de bail, prorata du premier mois (règle à faire **valider par le porteur de projet** avant implémentation).
 ### P2.4 Avis d'échéance
 - Génération manuelle « Générer les avis du mois » (`owner`/`manager`), annulation d'un avis avec motif (nouvelle fonction ; statut `annule` ; jamais de suppression).
