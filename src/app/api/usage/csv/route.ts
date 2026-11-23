@@ -2,16 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { activeMembership } from "@/lib/auth/session";
 import { limit } from "@/lib/security/rate-limit";
+import { csvDocument } from "@/lib/csv";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-/** Neutralise l'injection de formules à l'ouverture dans un tableur. */
-const cell = (v: string | number | boolean | null) => {
-  const s = v === null ? "" : String(v);
-  const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
-  return `"${safe.replace(/"/g, '""')}"`;
-};
 
 /** D.5 : export mensuel des envois (propriétaire ou comptable ; filtrage par la RLS). */
 export async function GET(req: NextRequest) {
@@ -37,11 +31,11 @@ export async function GET(req: NextRequest) {
     .lt("created_at", end.toISOString())
     .order("created_at");
 
-  const lines = [
-    ["date", "canal", "source", "facturable", "document"].map(cell).join(";"),
-    ...(rows ?? []).map((r) => [r.created_at, r.kind, r.source, r.billable ? "oui" : "non", r.document_id ?? ""].map(cell).join(";")),
-  ];
-  return new NextResponse("﻿" + lines.join("\r\n"), {
+  const body = csvDocument([
+    ["date", "canal", "source", "facturable", "document"],
+    ...(rows ?? []).map((r) => [r.created_at, r.kind, r.source, r.billable ? "oui" : "non", r.document_id ?? ""]),
+  ]);
+  return new NextResponse(body, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="envois-${mois}.csv"`,

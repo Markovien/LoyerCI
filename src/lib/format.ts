@@ -57,3 +57,18 @@ export function formatVerificationCode(signature: string): string {
     .toUpperCase()
     .replace(/(.{4})(?=.)/g, "$1-");
 }
+
+const dateTime = new Intl.DateTimeFormat("fr-FR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  timeZone: "Africa/Abidjan",
+});
+
+/** Horodatage complet (journal d'audit), heure d'Abidjan. */
+export function formatDateTime(value: string | Date): string {
+  return dateTime.format(new Date(value));
+}

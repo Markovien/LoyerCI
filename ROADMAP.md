@@ -143,8 +143,9 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 ### P2.5 Membres et rôles (fait le 23/11/2026)
 - Invitation de gestionnaires et comptables, changement de rôle, retrait (au moins un `owner` doit rester). Sélecteur d'organisation si l'utilisateur en a plusieurs.
 - Réalisé : `dashboard/parametres/membres` (propriétaire). Ajout par e-mail (compte créé si besoin, lien de connexion envoyé ; aucune inscription publique, D1). Lignes `owner` verrouillées (`FOR UPDATE`) : deux rétrogradations simultanées ne peuvent pas vider l'organisation de ses propriétaires (test de concurrence). Organisation active portée par un cookie `httpOnly` revérifié à chaque requête, **seule** source pour les pages comme pour les actions (le paramètre d'URL `?org=` est abandonné).
-### P2.6 Journal d'audit consultable
+### P2.6 Journal d'audit consultable (fait le 23/11/2026)
 - `dashboard/audit` (`owner`) : filtrage par action, période et acteur ; export CSV ; indicateur d'intégrité de la chaîne (`private.verify_audit_chain()` via une fonction exposée au rôle `owner`).
+- Réalisé : lecture par la RLS existante ; filtres validés par Zod (valeurs invalides ignorées à l'affichage, refusées à l'export) ; export CSV de 5 000 lignes maximum, **journalisé avant remise** (`audit_exporte` : filtres, nombre de lignes, IP, user-agent), avec n° de chaîne et empreinte SHA-256 de chaque ligne ; formules neutralisées. Intégrité : `audit_integrity` exécutée **par le serveur** (`service_role`, rôle `owner` revérifié en base) plutôt qu'exposée à `authenticated` : la liste blanche du garde-fou reste inchangée. Le verdict porte sur la chaîne entière (toutes organisations) sans en révéler le détail. Limite connue : la suppression des derniers maillons reste indétectable sans l'export externe de la tête de chaîne (P4.4).
 
 ---
 

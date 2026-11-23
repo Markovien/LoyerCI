@@ -1677,5 +1677,59 @@ do $$ begin
   assert exists (select 1 from public.audit_logs where action = 'membre_role_modifie' and metadata ->> 'avant' = 'manager' and metadata ->> 'apres' = 'accountant'), 'changement de rôle non tracé';
 end $$;
 
+-- =============================================================================
+-- P2.6 — Journal d'audit consultable (propriétaire), intégrité, export tracé
+-- =============================================================================
+set role service_role;
+do $$
+declare
+  v_org constant uuid := 'c0000000-0000-4000-8000-000000000001';
+  v_owner constant uuid := 'a0000000-0000-4000-8000-000000000001';
+  v_manager constant uuid := 'a0000000-0000-4000-8000-000000000002';
+  r record;
+begin
+  -- La chaîne a été volontairement altérée plus haut (scénario superutilisateur) :
+  -- le propriétaire DOIT voir l'alerte.
+  select * into r from public.audit_integrity(v_owner, v_org);
+  assert not r.ok, 'altération du journal non signalée au propriétaire';
+  assert r.org_rows > 0 and r.head_seq >= r.org_rows, 'compteurs d''intégrité incohérents';
+  begin
+    perform public.audit_integrity(v_manager, v_org);
+    raise exception 'ÉCHEC : un gestionnaire consulte l''intégrité du journal';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.log_audit_export(v_manager, v_org, '{}'::jsonb, 1, null, null);
+    raise exception 'ÉCHEC : un gestionnaire exporte le journal';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.log_audit_export(v_owner, v_org, '[]'::jsonb, 1, null, null);
+    raise exception 'ÉCHEC : filtres non objet acceptés';
+  exception when invalid_parameter_value then null;
+  end;
+  perform public.log_audit_export(v_owner, v_org, jsonb_build_object('action', 'membre_ajoute'), 3, '41.202.10.5', 'Chrome');
+  assert exists (select 1 from public.audit_logs where action = 'audit_exporte' and org_id = v_org and actor_id = v_owner
+                   and (metadata ->> 'lignes')::int = 3 and metadata -> 'filtres' ->> 'action' = 'membre_ajoute'
+                   and user_agent = 'Chrome'), 'export non tracé';
+  raise notice 'OK  P2.6 journal : altération signalée au propriétaire (seul), export tracé avec filtres et nombre de lignes';
+end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000002';
+do $$ begin
+  assert (select count(*) from public.audit_logs) = 0, 'un gestionnaire lit le journal d''audit';
+end $$;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000001';
+do $$ begin
+  assert (select count(*) from public.audit_logs) > 0, 'le propriétaire ne lit pas son journal';
+  assert not exists (select 1 from public.audit_logs where org_id <> 'c0000000-0000-4000-8000-000000000001'), 'journal d''une autre organisation visible';
+  raise notice 'OK  P2.6 journal : lecture réservée au propriétaire, cloisonnée par organisation';
+end $$;
+reset role;
+do $$ begin
+  assert not has_function_privilege('authenticated', 'public.audit_integrity(uuid, uuid)', 'execute'), 'intégrité exposée au client';
+  assert not has_function_privilege('authenticated', 'public.log_audit_export(uuid, uuid, jsonb, integer, inet, text)', 'execute'), 'export exposé au client';
+end $$;
 
-\echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='
+\echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ===

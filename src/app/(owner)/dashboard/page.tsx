@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Send, Settings, ShieldCheck, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, ScrollText, Send, Settings, ShieldCheck, Users } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { Button } from "@/components/ui/button";
@@ -163,6 +163,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <Link href="/dashboard/parametres/membres" className="inline-flex items-center gap-1 text-muted-foreground hover:underline">
               <Users className="size-4" aria-hidden />
               <span className="hidden sm:inline">Équipe</span>
+            </Link>
+          )}
+          {membership.role === "owner" && (
+            <Link href="/dashboard/audit" className="inline-flex items-center gap-1 text-muted-foreground hover:underline">
+              <ScrollText className="size-4" aria-hidden />
+              <span className="hidden sm:inline">Journal</span>
             </Link>
           )}
           {memberships.length > 1 ? (
