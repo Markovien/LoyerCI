@@ -321,6 +321,45 @@ export type Database = {
           },
         ];
       };
+      message_events: {
+        Row: {
+          billable: boolean;
+          created_at: string;
+          document_id: string | null;
+          id: number;
+          kind: Database["public"]["Enums"]["message_kind"];
+          org_id: string;
+          source: Database["public"]["Enums"]["message_source"];
+        };
+        ComputedFields: never;
+        Insert: {
+          billable: boolean;
+          created_at?: string;
+          document_id?: string | null;
+          id?: never;
+          kind: Database["public"]["Enums"]["message_kind"];
+          org_id: string;
+          source: Database["public"]["Enums"]["message_source"];
+        };
+        Update: {
+          billable?: boolean;
+          created_at?: string;
+          document_id?: string | null;
+          id?: never;
+          kind?: Database["public"]["Enums"]["message_kind"];
+          org_id?: string;
+          source?: Database["public"]["Enums"]["message_source"];
+        };
+        Relationships: [
+          {
+            foreignKeyName: "message_events_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       notices: {
         Row: {
           amount_due: number;
@@ -421,6 +460,39 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [];
+      };
+      org_message_quotas: {
+        Row: {
+          email_daily: number;
+          org_id: string;
+          otp_daily: number;
+          sms_daily: number;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          email_daily?: number;
+          org_id: string;
+          otp_daily?: number;
+          sms_daily?: number;
+          updated_at?: string;
+        };
+        Update: {
+          email_daily?: number;
+          org_id?: string;
+          otp_daily?: number;
+          sms_daily?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "org_message_quotas_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: true;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       org_payment_settings: {
         Row: {
@@ -1049,6 +1121,15 @@ export type Database = {
         Returns: number;
       };
       mark_overdue_invoices: { Args: Record<PropertyKey, never>; Returns: number };
+      message_usage_summary: {
+        Args: { p_month: string; p_org: string };
+        Returns: {
+          billable: boolean;
+          kind: Database["public"]["Enums"]["message_kind"];
+          source: Database["public"]["Enums"]["message_source"];
+          total: number;
+        }[];
+      };
       my_account_deletion: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -1084,6 +1165,14 @@ export type Database = {
           p_ua: string;
         };
         Returns: string;
+      };
+      reserve_automated_message: {
+        Args: {
+          p_document?: string;
+          p_kind: Database["public"]["Enums"]["message_kind"];
+          p_org: string;
+        };
+        Returns: number;
       };
       review_manual_payment: {
         Args: {
@@ -1188,6 +1277,8 @@ export type Database = {
       lease_status: "actif" | "termine" | "resilie";
       lease_usage: "habitation" | "professionnel";
       member_role: "owner" | "manager" | "accountant";
+      message_kind: "whatsapp" | "email" | "sms" | "otp" | "partage" | "telechargement";
+      message_source: "manuel" | "automatique";
       mobile_operator: "orange" | "mtn" | "moov" | "wave";
       payment_method: "mobile_money" | "virement" | "especes";
       payment_provider: "cinetpay" | "wave" | "pispi" | "manuel" | "direct";
@@ -1316,6 +1407,8 @@ export const Constants = {
       lease_status: ["actif", "termine", "resilie"],
       lease_usage: ["habitation", "professionnel"],
       member_role: ["owner", "manager", "accountant"],
+      message_kind: ["whatsapp", "email", "sms", "otp", "partage", "telechargement"],
+      message_source: ["manuel", "automatique"],
       mobile_operator: ["orange", "mtn", "moov", "wave"],
       payment_method: ["mobile_money", "virement", "especes"],
       payment_provider: ["cinetpay", "wave", "pispi", "manuel", "direct"],

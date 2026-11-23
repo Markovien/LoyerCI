@@ -466,7 +466,8 @@ begin
      and p.oid::regprocedure::text not in (
        'private.user_org_ids(member_role[])', 'private.user_tenant_ids()', 'private.tenant_org_ids()',
        'private.tenant_property_ids()', 'get_transfer_instructions(uuid)', 'dashboard_kpis(uuid,date)',
-       'get_direct_payment_instructions(uuid)', 'my_account_deletion()');
+       'get_direct_payment_instructions(uuid)', 'my_account_deletion()',
+       'message_usage_summary(uuid,date)');
   assert v is null, 'fonctions exécutables par authenticated hors liste blanche : ' || v;
 
   select string_agg(c.relname, ', ') into v
@@ -1264,5 +1265,68 @@ end $$;
 do $$ begin
   assert not has_function_privilege('authenticated', 'public.process_tenant_retention(timestamptz)', 'execute'), 'rétention exposée';
 end $$;
+
+
+-- =============================================================================
+-- D.5 — Comptage des envois, plafonds anti-abus, récapitulatif de facturation
+-- =============================================================================
+do $$ begin
+  assert (select count(*) from public.message_events where source = 'manuel' and not billable) >= 2, 'envois manuels non comptés';
+end $$;
+insert into public.org_message_quotas (org_id, sms_daily) values ('c0000000-0000-4000-8000-000000000001', 2)
+  on conflict (org_id) do update set sms_daily = 2;
+set role service_role;
+do $$ begin
+  perform public.reserve_automated_message('c0000000-0000-4000-8000-000000000001', 'sms');
+  perform public.reserve_automated_message('c0000000-0000-4000-8000-000000000001', 'sms');
+  begin
+    perform public.reserve_automated_message('c0000000-0000-4000-8000-000000000001', 'sms');
+    raise exception 'ÉCHEC : plafond quotidien SMS dépassé';
+  exception when raise_exception then
+    assert sqlerrm like '%Plafond quotidien%', 'message inattendu : ' || sqlerrm;
+  end;
+  perform public.reserve_automated_message('c0000000-0000-4000-8000-000000000001', 'otp'); -- autre plafond
+  perform public.reserve_automated_message('c0000000-0000-4000-8000-000000000002', 'sms'); -- autre organisation
+  begin
+    perform public.reserve_automated_message('c0000000-0000-4000-8000-000000000001', 'whatsapp');
+    raise exception 'ÉCHEC : envoi manuel réservé comme automatique';
+  exception when invalid_parameter_value then null;
+  end;
+  raise notice 'OK  D.5 plafonds : quotidien par organisation et par type, appliqué en base';
+end $$;
+reset role;
+do $$ begin
+  begin
+    insert into public.message_events (org_id, kind, source, billable) values ('c0000000-0000-4000-8000-000000000001', 'whatsapp', 'manuel', true);
+    raise exception 'ÉCHEC : envoi manuel facturable';
+  exception when check_violation then null;
+  end;
+  begin
+    delete from public.message_events;
+    raise exception 'ÉCHEC : registre des envois modifiable';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000001';
+do $$
+declare v bigint;
+begin
+  select total into v from public.message_usage_summary('c0000000-0000-4000-8000-000000000001', current_date)
+   where kind = 'sms' and billable;
+  assert v = 2, 'récapitulatif SMS facturables : ' || coalesce(v, -1);
+end $$;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000002';
+do $$ begin
+  perform public.message_usage_summary('c0000000-0000-4000-8000-000000000001', current_date);
+  raise exception 'ÉCHEC : un gestionnaire lit la consommation';
+exception when insufficient_privilege then null;
+end $$;
+set request.jwt.claim.sub = 'a0000000-0000-4000-8000-000000000003';
+do $$ begin
+  assert (select count(*) from public.message_events) = 0, 'un locataire lit le registre';
+  raise notice 'OK  D.5 registre : ajout seul, manuel jamais facturable, récapitulatif owner/comptable, invisible des autres';
+end $$;
+reset role;
 
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

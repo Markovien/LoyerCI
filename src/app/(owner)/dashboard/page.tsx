@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Settings, ShieldCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, Send, Settings, ShieldCheck } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { requireOrgMember } from "@/lib/auth/session";
@@ -145,6 +145,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <Brand href="/dashboard" />
         <div className="flex items-center gap-3 text-sm">
           <RealtimeRefresh orgId={orgId} />
+          {canValidate && (
+            <Link href="/dashboard/parametres/envois" className="inline-flex items-center gap-1 text-muted-foreground hover:underline">
+              <Send className="size-4" aria-hidden />
+              <span className="hidden sm:inline">Envois</span>
+            </Link>
+          )}
           {membership.role === "owner" && (
             <Link href="/dashboard/parametres/paiements" className="inline-flex items-center gap-1 text-muted-foreground hover:underline">
               <Settings className="size-4" aria-hidden />
