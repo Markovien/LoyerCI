@@ -466,7 +466,7 @@ begin
      and p.oid::regprocedure::text not in (
        'private.user_org_ids(member_role[])', 'private.user_tenant_ids()', 'private.tenant_org_ids()',
        'private.tenant_property_ids()', 'get_transfer_instructions(uuid)', 'dashboard_kpis(uuid,date)',
-       'get_direct_payment_instructions(uuid)');
+       'get_direct_payment_instructions(uuid)', 'my_account_deletion()');
   assert v is null, 'fonctions exécutables par authenticated hors liste blanche : ' || v;
 
   select string_agg(c.relname, ', ') into v
@@ -1207,5 +1207,62 @@ do $$ begin
   raise notice 'OK  D.2 suivi : trace en ajout seul, auditée, invisible des locataires';
 end $$;
 reset role;
+
+
+-- =============================================================================
+-- D.4 — Sortie du parc : avis de départ, rappel, suppression du compte à M+3
+-- =============================================================================
+-- Locataire dédié au test : un bail terminé il y a 50 jours.
+insert into auth.users (id, email) values ('a0000000-0000-4000-8000-0000000000d4', 'ancien.locataire@example.ci');
+insert into public.tenants (id, org_id, user_id, full_name, phone) values
+  ('e0000000-0000-4000-8000-0000000000d4', 'c0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-0000000000d4', 'Ancien Locataire', '2250707777666');
+insert into public.properties (id, org_id, code, label, type, commune) values
+  ('d0000000-0000-4000-8000-0000000000d4', 'c0000000-0000-4000-8000-000000000001', 'OLD01', 'Studio', 'studio', 'Treichville');
+insert into public.leases (id, org_id, property_id, tenant_id, rent_amount, start_date) values
+  ('f0000000-0000-4000-8000-0000000000d4', 'c0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-0000000000d4', 'e0000000-0000-4000-8000-0000000000d4', 60000, '2025-01-01');
+set role service_role;
+select public.generate_monthly_invoices('2026-10-01') \g /dev/null
+reset role;
+-- Une déclaration du locataire (ne doit pas bloquer la suppression du compte)
+set role service_role;
+select public.submit_transfer_proof('a0000000-0000-4000-8000-0000000000d4',
+  (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-0000000000d4' and period = '2026-10-01'), 60000, null,
+  'c0000000-0000-4000-8000-000000000001/' || (select id from public.invoices where lease_id = 'f0000000-0000-4000-8000-0000000000d4' and period = '2026-10-01') || '/' || gen_random_uuid() || '.pdf',
+  'VIR-' || gen_random_uuid(), null, null) \g /dev/null
+reset role;
+do $$
+declare r record;
+begin
+  -- Bail encore actif : rien
+  select * into r from public.process_tenant_retention();
+  assert not exists (select 1 from private.outbox where payload ->> 'user_id' = 'a0000000-0000-4000-8000-0000000000d4'), 'bail actif : aucune action attendue';
+
+  update public.leases set status = 'termine' where id = 'f0000000-0000-4000-8000-0000000000d4';
+  assert (select ended_at from public.leases where id = 'f0000000-0000-4000-8000-0000000000d4') is not null, 'ended_at non posé';
+  -- J0 : avis de départ, une seule fois
+  perform public.process_tenant_retention();
+  perform public.process_tenant_retention();
+  assert (select count(*) from private.outbox where kind = 'depart_locataire' and payload ->> 'user_id' = 'a0000000-0000-4000-8000-0000000000d4') = 1, 'avis de départ unique attendu';
+  -- M+2 : rappel
+  perform public.process_tenant_retention(now() + interval '2 months 1 day');
+  assert (select count(*) from private.outbox where kind = 'rappel_suppression_compte' and payload ->> 'user_id' = 'a0000000-0000-4000-8000-0000000000d4') = 1, 'rappel attendu';
+  -- M+3 : suppression du compte, documents conservés
+  select * into r from public.process_tenant_retention(now() + interval '3 months 1 day');
+  assert r.suppressions >= 1, 'suppression attendue';
+  assert not exists (select 1 from auth.users where id = 'a0000000-0000-4000-8000-0000000000d4'), 'compte non supprimé';
+  assert (select user_id from public.tenants where id = 'e0000000-0000-4000-8000-0000000000d4') is null, 'lien du locataire non retiré';
+  assert exists (select 1 from public.invoices where tenant_id = 'e0000000-0000-4000-8000-0000000000d4'), 'avis supprimés';
+  assert exists (select 1 from public.payments p join public.invoices i on i.id = p.invoice_id
+                  where i.tenant_id = 'e0000000-0000-4000-8000-0000000000d4' and p.declared_by is null), 'déclaration perdue';
+  assert exists (select 1 from public.audit_logs where action = 'compte_locataire_supprime'
+                  and entity_id = 'a0000000-0000-4000-8000-0000000000d4' and actor_kind = 'system'), 'suppression non tracée';
+  -- Un membre d'organisation n'est jamais supprimé ; les locataires en cours non plus
+  assert exists (select 1 from auth.users where id = 'a0000000-0000-4000-8000-000000000001'), 'propriétaire supprimé !';
+  assert exists (select 1 from auth.users where id = 'a0000000-0000-4000-8000-000000000003'), 'locataire en cours supprimé !';
+  raise notice 'OK  D.4 sortie du parc : avis de départ unique, rappel M+2, compte supprimé à M+3, documents et paiements conservés, membres épargnés';
+end $$;
+do $$ begin
+  assert not has_function_privilege('authenticated', 'public.process_tenant_retention(timestamptz)', 'execute'), 'rétention exposée';
+end $$;
 
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

@@ -222,6 +222,7 @@ export type Database = {
           deposit_months: number;
           due_day: number;
           end_date: string | null;
+          ended_at: string | null;
           id: string;
           org_id: string;
           property_id: string;
@@ -239,6 +240,7 @@ export type Database = {
           deposit_months?: number;
           due_day?: number;
           end_date?: string | null;
+          ended_at?: string | null;
           id?: string;
           org_id: string;
           property_id: string;
@@ -255,6 +257,7 @@ export type Database = {
           deposit_months?: number;
           due_day?: number;
           end_date?: string | null;
+          ended_at?: string | null;
           id?: string;
           org_id?: string;
           property_id?: string;
@@ -1046,6 +1049,21 @@ export type Database = {
         Returns: number;
       };
       mark_overdue_invoices: { Args: Record<PropertyKey, never>; Returns: number };
+      my_account_deletion: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          deletion_at: string;
+          departed_at: string;
+        }[];
+      };
+      process_tenant_retention: {
+        Args: { p_now?: string };
+        Returns: {
+          departs: number;
+          rappels: number;
+          suppressions: number;
+        }[];
+      };
       record_cash_payment: {
         Args: { p_actor: string; p_amount: number; p_invoice: string; p_ip: unknown; p_ua: string };
         Returns: {
