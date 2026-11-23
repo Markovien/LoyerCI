@@ -217,6 +217,7 @@ export type Database = {
       leases: {
         Row: {
           advance_months: number;
+          advance_recorded_at: string | null;
           charges_amount: number;
           created_at: string;
           deposit_months: number;
@@ -235,6 +236,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           advance_months?: number;
+          advance_recorded_at?: string | null;
           charges_amount?: number;
           created_at?: string;
           deposit_months?: number;
@@ -252,6 +254,7 @@ export type Database = {
         };
         Update: {
           advance_months?: number;
+          advance_recorded_at?: string | null;
           charges_amount?: number;
           created_at?: string;
           deposit_months?: number;
@@ -943,6 +946,7 @@ export type Database = {
           org_id: string;
           phone: string;
           user_id: string | null;
+          whatsapp_consent_at: string | null;
         };
         ComputedFields: never;
         Insert: {
@@ -953,6 +957,7 @@ export type Database = {
           org_id: string;
           phone: string;
           user_id?: string | null;
+          whatsapp_consent_at?: string | null;
         };
         Update: {
           created_at?: string;
@@ -962,6 +967,7 @@ export type Database = {
           org_id?: string;
           phone?: string;
           user_id?: string | null;
+          whatsapp_consent_at?: string | null;
         };
         Relationships: [
           {
@@ -1062,6 +1068,7 @@ export type Database = {
         Args: { p_account: string; p_actor: string; p_ip: unknown; p_ua: string };
         Returns: undefined;
       };
+      close_ended_leases: { Args: Record<PropertyKey, never>; Returns: number };
       confirm_provider_payment: {
         Args: {
           p_amount: number;
@@ -1252,6 +1259,10 @@ export type Database = {
           suppressions: number;
         }[];
       };
+      record_advance: {
+        Args: { p_actor: string; p_ip: unknown; p_lease: string; p_ua: string };
+        Returns: number;
+      };
       record_cash_payment: {
         Args: { p_actor: string; p_amount: number; p_invoice: string; p_ip: unknown; p_ua: string };
         Returns: {
@@ -1318,6 +1329,16 @@ export type Database = {
         };
         Returns: undefined;
       };
+      set_whatsapp_consent: {
+        Args: {
+          p_actor: string;
+          p_consent: boolean;
+          p_ip: unknown;
+          p_tenant: string;
+          p_ua: string;
+        };
+        Returns: undefined;
+      };
       submit_direct_payment: {
         Args: {
           p_actor: string;
@@ -1341,6 +1362,17 @@ export type Database = {
           p_ip: unknown;
           p_proof_path: string;
           p_tx_id: string;
+          p_ua: string;
+        };
+        Returns: string;
+      };
+      terminate_lease: {
+        Args: {
+          p_actor: string;
+          p_end_date: string;
+          p_ip: unknown;
+          p_lease: string;
+          p_reason: string;
           p_ua: string;
         };
         Returns: string;
@@ -1419,7 +1451,7 @@ export type Database = {
       message_kind: "whatsapp" | "email" | "sms" | "otp" | "partage" | "telechargement";
       message_source: "manuel" | "automatique";
       mobile_operator: "orange" | "mtn" | "moov" | "wave";
-      payment_method: "mobile_money" | "virement" | "especes";
+      payment_method: "mobile_money" | "virement" | "especes" | "avance";
       payment_provider: "cinetpay" | "wave" | "pispi" | "manuel" | "direct";
       payment_status: "initie" | "en_attente_validation" | "reussi" | "echoue" | "rejete";
       payout_kind: "banque" | "mobile_money" | "pispi_alias" | "payment_link";
@@ -1549,7 +1581,7 @@ export const Constants = {
       message_kind: ["whatsapp", "email", "sms", "otp", "partage", "telechargement"],
       message_source: ["manuel", "automatique"],
       mobile_operator: ["orange", "mtn", "moov", "wave"],
-      payment_method: ["mobile_money", "virement", "especes"],
+      payment_method: ["mobile_money", "virement", "especes", "avance"],
       payment_provider: ["cinetpay", "wave", "pispi", "manuel", "direct"],
       payment_status: ["initie", "en_attente_validation", "reussi", "echoue", "rejete"],
       payout_kind: ["banque", "mobile_money", "pispi_alias", "payment_link"],

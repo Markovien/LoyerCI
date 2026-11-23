@@ -23,7 +23,12 @@ const PAYMENT_STATUS: Record<string, string> = {
   echoue: "Échoué",
   rejete: "Rejeté",
 };
-const METHOD: Record<string, string> = { mobile_money: "Mobile Money", virement: "Virement", especes: "Espèces" };
+const METHOD: Record<string, string> = {
+  mobile_money: "Mobile Money",
+  virement: "Virement",
+  especes: "Espèces",
+  avance: "Avance (signature)",
+};
 
 export default async function PayPage({ params }: { params: Promise<{ invoiceId: string }> }) {
   const { invoiceId } = await params;

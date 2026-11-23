@@ -132,9 +132,11 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 - `dashboard/biens` : liste, fiche, création, modification (`owner`/`manager`) via des fonctions SQL `create_property` / `update_property` (audit `bien_cree`/`bien_modifie` à ajouter). Champs : type, code (unique par organisation), commune/quartier (liste des communes d'Abidjan + saisie libre pour l'intérieur), adresse.
 ### P2.2 Locataires et invitation
 - Fiche locataire (sans pièce d'identité stockée). **Invitation** : lien à usage unique (jeton aléatoire haché en base, expiration 7 jours) envoyé par WhatsApp/SMS. À l'ouverture, création ou liaison du compte → `tenants.user_id`. Audit `locataire_invite`, `locataire_lie`.
-### P2.3 Baux
-- Recueillir et tracer le **consentement du locataire au canal WhatsApp** (reporté de D.2).
-- Formulaire utilisant `create_lease` (plafonds légaux déjà en base : afficher le message de la loi n° 2019-576 en cas de refus). Résiliation (`bail_resilie`), fin de bail, prorata du premier mois (règle à faire **valider par le porteur de projet** avant implémentation).
+### P2.3 Baux (fait le 23/11/2026)
+- Décisions du 23/11/2026 : **mois d'entrée facturé entier** (pas de prorata) ; **avance** enregistrée par le propriétaire -> avis soldés et quittances signées « Avance versée à la signature » pour les N premiers mois (une fois par bail).
+- Consentement du locataire au canal WhatsApp recueilli et tracé à la création du bail (reporté de D.2).
+- Résiliation immédiate ou planifiée (clôture automatique quotidienne), messages légaux explicites (loi n° 2019-576).
+
 ### P2.4 Avis d'échéance
 - Génération manuelle « Générer les avis du mois » (`owner`/`manager`), annulation d'un avis avec motif (nouvelle fonction ; statut `annule` ; jamais de suppression).
 - Annulation d'une quittance (`owner` uniquement, motif obligatoire) : le trigger d'immuabilité l'autorise déjà ; ajouter la fonction et l'audit.
@@ -213,5 +215,5 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 2. Formats réels des n° de transaction et des SMS par opérateur (utiles au rapprochement automatique de la phase 5, plus à P1.5).
 3. Fournisseur SMS (D.3, P3.1) : coût et délivrabilité en Côte d'Ivoire.
 7. Durée légale de conservation des quittances et paiements (OHADA, 10 ans ?) à faire confirmer par un juriste.
-4. Politique de prorata, de pénalités de retard (attention au cadre légal) et durées de conservation.
+4. Pénalités de retard (attention au cadre légal) et durées de conservation (le prorata est tranché : mois d'entrée entier).
 5. Modèle économique de LoyerCI (abonnement bailleur ?), qui ne doit **jamais** reposer sur la détention des loyers.

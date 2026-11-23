@@ -55,7 +55,7 @@ export function PropertyForm({ orgId, propertyId, initial }: { orgId: string; pr
         });
       }}
     >
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
         <div className="grid gap-1.5">
           <Label htmlFor="code">Code</Label>
           <Input
@@ -74,7 +74,7 @@ export function PropertyForm({ orgId, propertyId, initial }: { orgId: string; pr
             id="type"
             name="type"
             defaultValue={initial?.type ?? "appartement"}
-            className="h-10 rounded-md border bg-card px-2 text-sm"
+            className="h-10 w-full min-w-0 rounded-md border bg-card px-2 text-sm"
           >
             {PROPERTY_TYPES.map((t) => (
               <option key={t.id} value={t.id}>
@@ -88,7 +88,7 @@ export function PropertyForm({ orgId, propertyId, initial }: { orgId: string; pr
         <Label htmlFor="label">Libellé</Label>
         <Input id="label" name="label" required maxLength={120} defaultValue={initial?.label} placeholder="Villa Duplex 5 pièces" />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
         <div className="grid gap-1.5">
           <Label htmlFor="city">Ville</Label>
           <Input id="city" name="city" required maxLength={60} value={city} onChange={(e) => setCity(e.target.value)} />
@@ -101,7 +101,7 @@ export function PropertyForm({ orgId, propertyId, initial }: { orgId: string; pr
               name="commune"
               required
               defaultValue={initial?.commune ?? ""}
-              className="h-10 rounded-md border bg-card px-2 text-sm"
+              className="h-10 w-full min-w-0 rounded-md border bg-card px-2 text-sm"
             >
               <option value="" disabled>
                 Choisir…
@@ -117,7 +117,7 @@ export function PropertyForm({ orgId, propertyId, initial }: { orgId: string; pr
           )}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
         <div className="grid gap-1.5">
           <Label htmlFor="quartier">Quartier</Label>
           <Input id="quartier" name="quartier" maxLength={80} defaultValue={initial?.quartier} placeholder="ex. Riviera 3" />

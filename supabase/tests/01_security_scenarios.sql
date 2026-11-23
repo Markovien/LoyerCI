@@ -1465,4 +1465,97 @@ do $$ begin
   assert not exists (select 1 from public.audit_logs where action = 'locataire_cree' and metadata::text like '%0707000999%'), 'numéro en clair dans l''audit';
 end $$;
 
+
+-- =============================================================================
+-- P2.3 — Baux : création, avance, consentement WhatsApp, résiliation
+-- =============================================================================
+set role service_role;
+do $$
+declare
+  v_prop uuid := (select id from public.properties where code = 'APT40');
+  v_tenant uuid := (select id from public.tenants where full_name = 'Diabaté Awa');
+  l uuid;
+  n int;
+begin
+  begin -- plafond légal
+    perform public.create_lease('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', v_prop, v_tenant,
+      'habitation', 150000, 0, 2::smallint, 3::smallint, 5::smallint, '2026-11-15', null, null);
+    raise exception 'ÉCHEC : 3 mois d''avance acceptés';
+  exception when invalid_parameter_value then
+    assert sqlerrm like 'Loi n° 2019-576%', 'message inattendu : ' || sqlerrm;
+  end;
+  begin -- bien d'une autre organisation (déjà loué là-bas) : aucune fuite d'information
+    perform public.create_lease('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001',
+      'd0000000-0000-4000-8000-000000000004', v_tenant, 'habitation', 150000, 0, 2::smallint, 2::smallint, 5::smallint, '2026-11-15', null, null);
+    raise exception 'ÉCHEC : bien d''une autre organisation accepté';
+  exception when invalid_parameter_value then
+    assert sqlerrm = 'Bien ou locataire inconnu dans votre organisation', 'fuite d''information : ' || sqlerrm;
+  end;
+  l := public.create_lease('a0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000001', v_prop, v_tenant,
+         'habitation', 150000, 10000, 2::smallint, 2::smallint, 5::smallint, '2026-11-15', '41.202.10.9', 'Chrome');
+  begin -- bien déjà loué
+    perform public.create_lease('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', v_prop, v_tenant,
+      'habitation', 150000, 0, 2::smallint, 2::smallint, 5::smallint, '2026-12-01', null, null);
+    raise exception 'ÉCHEC : second bail actif sur le même bien';
+  exception when raise_exception then null;
+  end;
+
+  -- Avance : propriétaire seulement, une fois ; mois d'entrée (novembre) compté entier
+  begin
+    perform public.record_advance('a0000000-0000-4000-8000-000000000002', l, null, null); -- gestionnaire
+    raise exception 'ÉCHEC : un gestionnaire enregistre l''avance';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.record_advance('a0000000-0000-4000-8000-000000000005', l, null, null); -- comptable
+    raise exception 'ÉCHEC : un comptable enregistre l''avance';
+  exception when insufficient_privilege then null;
+  end;
+  n := public.record_advance('a0000000-0000-4000-8000-000000000001', l, '41.202.10.5', 'Chrome');
+  assert n = 2, 'deux mois soldés attendus : ' || n;
+  assert (select count(*) from public.invoices where lease_id = l and status = 'paye' and period in ('2026-11-01', '2026-12-01')) = 2, 'novembre et décembre soldés';
+  assert (select amount_paid from public.invoices where lease_id = l and period = '2026-11-01') = 160000, 'mois d''entrée entier (pas de prorata)';
+  assert (select count(*) from public.receipts r join public.invoices i on i.id = r.invoice_id
+           where i.lease_id = l and r.payment_methods = 'avance' and r.signature_version = 2) = 2, 'deux quittances « avance » signées';
+  begin
+    perform public.record_advance('a0000000-0000-4000-8000-000000000001', l, null, null);
+    raise exception 'ÉCHEC : avance enregistrée deux fois';
+  exception when raise_exception then null;
+  end;
+  raise notice 'OK  P2.3 bail : plafond légal expliqué, cloisonnement, un bail actif par bien ; avance owner seul, unique, mois d''entrée entier, quittances signées';
+
+  -- Consentement WhatsApp
+  perform public.set_whatsapp_consent('a0000000-0000-4000-8000-000000000002', v_tenant, true, null, null);
+  assert (select whatsapp_consent_at from public.tenants where id = v_tenant) is not null, 'consentement non enregistré';
+  begin
+    perform public.set_whatsapp_consent('a0000000-0000-4000-8000-000000000003', v_tenant, true, null, null); -- locataire tiers
+    raise exception 'ÉCHEC : consentement modifié par un non-membre';
+  exception when insufficient_privilege then null;
+  end;
+
+  -- Résiliation planifiée puis clôture automatique
+  begin
+    perform public.terminate_lease('a0000000-0000-4000-8000-000000000001', l, '2026-11-10', 'Départ', null, null);
+    raise exception 'ÉCHEC : fin avant le début';
+  exception when invalid_parameter_value then null;
+  end;
+  assert public.terminate_lease('a0000000-0000-4000-8000-000000000001', l, (current_date + 30), 'Départ annoncé', null, null) = 'planifie', 'résiliation planifiée';
+  assert (select status from public.leases where id = l) = 'actif', 'le bail doit rester actif jusqu''à sa fin';
+  raise notice 'OK  P2.3 consentement WhatsApp tracé ; résiliation planifiée (bail actif jusqu''à la date de fin)';
+end $$;
+reset role;
+update public.leases set end_date = current_date - 1 where id = (select id from public.leases where property_id = (select id from public.properties where code = 'APT40') and status = 'actif');
+set role service_role;
+do $$ begin
+  assert public.close_ended_leases() >= 1, 'clôture attendue';
+  assert (select status from public.leases where property_id = (select id from public.properties where code = 'APT40') order by created_at desc limit 1) = 'termine', 'bail non clos';
+  raise notice 'OK  P2.3 clôture automatique des baux arrivés à échéance';
+end $$;
+reset role;
+do $$ begin
+  assert exists (select 1 from public.audit_logs where action = 'avance_enregistree' and (metadata ->> 'mois_soldes')::int = 2), 'avance non tracée';
+  assert exists (select 1 from public.audit_logs where action = 'bail_termine' and actor_kind = 'system'), 'clôture non tracée';
+  assert exists (select 1 from public.audit_logs where action = 'consentement_whatsapp'), 'consentement non tracé';
+end $$;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

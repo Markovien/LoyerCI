@@ -15,6 +15,7 @@ const METHOD_LABELS: Record<string, string> = {
   mobile_money: "Mobile Money",
   virement: "Virement bancaire",
   especes: "Espèces",
+  avance: "Avance versée à la signature",
 };
 
 /** Les polices standard PDF (WinAnsi) ne gèrent pas certaines espaces Unicode : on normalise. */

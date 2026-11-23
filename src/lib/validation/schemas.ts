@@ -258,3 +258,29 @@ export const tenantSchema = z.object({
 
 /** Jeton d'invitation (base64url, 32 octets). */
 export const invitationTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/, "Lien d'invitation invalide");
+
+/** Création d'un bail (P2.3). Plafonds légaux (loi n° 2019-576) revérifiés en base. */
+export const leaseSchema = z
+  .object({
+    orgId: uuid,
+    propertyId: uuid,
+    tenantId: uuid,
+    usage: z.enum(["habitation", "professionnel"]),
+    rent: amountXOF.pipe(z.number().min(1000, "Loyer minimum : 1 000 FCFA")),
+    charges: z.coerce.number().int("Le franc CFA n'a pas de centimes").min(0).max(10_000_000),
+    depositMonths: z.coerce.number().int().min(0).max(12),
+    advanceMonths: z.coerce.number().int().min(0).max(12),
+    dueDay: z.coerce.number().int().min(1, "Jour d'échéance : 1 à 28").max(28, "Jour d'échéance : 1 à 28"),
+    startDate: z.iso.date({ error: "Date de début invalide" }),
+    whatsappConsent: z.boolean(),
+  })
+  .refine((v) => v.usage === "professionnel" || (v.depositMonths <= 2 && v.advanceMonths <= 2), {
+    message: "Loi n° 2019-576 : un bail d'habitation est limité à 2 mois de caution et 2 mois d'avance",
+    path: ["advanceMonths"],
+  });
+
+export const terminateLeaseSchema = z.object({
+  leaseId: uuid,
+  endDate: z.iso.date({ error: "Date de fin invalide" }),
+  reason: safeText(300).pipe(z.string().min(3, "Indiquez le motif")),
+});

@@ -10,6 +10,7 @@ test.describe("propriétaire", () => {
   test("crée puis modifie un bien ; doublon de code refusé", async ({ page }, info) => {
     test.skip(info.project.name !== "mobile", "une seule fois");
     await page.goto("/dashboard/biens");
+    await expect(page.getByTestId("property").first()).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     const form = page.getByRole("form", { name: "Nouveau bien" });
     await form.getByLabel("Code").fill(code.toLowerCase());
