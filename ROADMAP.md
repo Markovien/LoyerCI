@@ -157,9 +157,11 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 ### P3.1 OTP SMS (périmètre réduit par la phase D) — en suspens (24/11/2026)
 - Benchmark des fournisseurs fait : `docs/BENCHMARK-SMS.md` (recommandation : Orange SMS API CI et un agrégateur local, test réel sur les trois réseaux avant choix ; branchement par le crochet d'envoi de SMS de Supabase Auth).
 - Utilisé pour le compte locataire facultatif (D.4) et le téléchargement par code (D.3). Supabase Phone Auth avec un fournisseur SMS couvrant la Côte d'Ivoire (choix à faire valider : coût et délivrabilité). Connexion par numéro pour les locataires (cas majoritaire), lien magique conservé pour l'e-mail.
-### P3.2 Notifications transactionnelles
+### P3.2 Notifications transactionnelles (fait le 24/11/2026)
 - File `notifications` (table + Edge Function ou tâche planifiée) : avis disponible, paiement déclaré (vers le bailleur), paiement confirmé ou rejeté (vers le locataire), quittance disponible, changement de compte de réception (alerte), déclaration en attente depuis plus de 48 h.
 - Canaux : e-mail (Resend ou SMTP), SMS. WhatsApp Business API en option (coût par conversation à évaluer). Les liens `wa.me` existants restent l'option gratuite et manuelle.
+- Réalisé (e-mail, décision du 24/11) : file `private.outbox` alimentée par un **déclencheur sur le journal d'audit** (déclaration, confirmation, rejet : même transaction que l'événement, sans doublon) et par une tâche quotidienne (déclarations en attente depuis 48 h) ; destinataires résolus en base (propriétaires et comptables, jamais le gestionnaire ; le locataire seulement pour ses propres déclarations) ; route `GET /api/cron/notifications` protégée par `CRON_SECRET` (comparaison à temps constant), appelée toutes les 5 min (`vercel.json`) ; réservation par lots `FOR UPDATE SKIP LOCKED`, 5 tentatives, plafond quotidien appliqué en base (D.5) sauf pour les alertes de sécurité ; un e-mail par destinataire (aucune copie). Contenu : phrases simples, montant, période, lien vers la page authentifiée, mention « LoyerCI ne vous demandera jamais de payer sur un numéro… » ; **jamais** de coordonnée de paiement ni de motif de rejet saisi librement (affiché seulement dans l'espace). Les alertes de compte de réception (P1.6) et de départ du parc (D.4), déjà en file, sont désormais expédiées.
+- Non retenu : « avis disponible » et « quittance disponible » automatiques (les documents restent envoyés par le bailleur depuis ses comptes, D.2) ; SMS (en suspens).
 ### P3.3 Relances automatiques
 - J-3, J+3, J+10 (configurables par organisation), via `pg_cron` et la file de notifications. Contenu sans aucune coordonnée de paiement (invariant n°9).
 ### P3.4 Conservation des documents : 2 ans après émission (décision du 24/11/2026)
@@ -174,7 +176,7 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 
 1. **P4.1 Limiteur de débit distribué** : remplacer le stockage de `src/lib/security/rate-limit.ts` par Redis (ex. Upstash), sans changer l'interface `limit()`.
 2. **P4.2 Réconciliation de secours** (si CinetPay est activé) : tâche horaire qui interroge `/v2/payment/check` pour les intentions `initie` de plus de 30 minutes.
-3. **P4.3 Rétention** : purge des `webhook_events` après 90 jours  (les documents et preuves de paiement : 2 ans après émission, traité en P3.4).
+3. **P4.3 Rétention** : purge des `webhook_events` après 90 jours (les documents et preuves de paiement : 2 ans après émission, traité en P3.4).
 4. **P4.4 Audit hors base** : export quotidien signé de `audit_logs` vers un stockage WORM externe ; alerte si `verify_audit_chain()` renvoie une ligne.
 5. **P4.5 Observabilité** : Sentry (en filtrant toute donnée personnelle), journaux structurés, `report-to` pour la CSP.
 6. **P4.6 Sauvegardes et reprise** : PITR Supabase, procédure de restauration testée.

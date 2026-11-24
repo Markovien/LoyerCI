@@ -101,7 +101,8 @@ pendant la carence de 48 h. Un test vérifie qu'aucune page locataire ne contien
 - [ ] `SUPABASE_SERVICE_ROLE_KEY` (et, si CinetPay est utilisé, ses trois clés) uniquement côté serveur, jamais en `NEXT_PUBLIC_`
 - [ ] `CLIENT_IP_HEADER` / `TRUSTED_PROXY_HOPS` adaptés à l'hébergeur (Vercel : `x-real-ip`)
 - [ ] Inscription publique fermée sur le projet hébergé comme en local : `[auth] enable_signup = false`, **pas** celui de `[auth.email]`, qui couperait la connexion (M6) ; invitation seule (D1)
-- [ ] Limiteur de débit partagé (Redis), expédition des alertes de la file `private.outbox` (e-mail/SMS)
+- [ ] Limiteur de débit partagé (Redis)
+- [ ] Notifications : `SMTP_URL` et `MAIL_FROM` (adresse LoyerCI avec SPF, DKIM et DMARC), `CRON_SECRET` aléatoire ; ordonnanceur toutes les 5 min sur `/api/cron/notifications` (`vercel.json` : offre Vercel permettant cette fréquence, sinon ordonnanceur externe)
 - [ ] Export externe régulier de la tête de chaîne d'audit (`private.audit_chain_head()`)
 - [ ] Contrôle manuel d'une affiche PI-SPI imprimée avec l'application d'un établissement participant
 - [ ] Tests d'intrusion

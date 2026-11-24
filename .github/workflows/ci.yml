@@ -72,6 +72,9 @@ jobs:
             echo "NEXT_PUBLIC_APP_URL=http://localhost:3000"
             echo "CLIENT_IP_HEADER=x-forwarded-for"
             echo "TRUSTED_PROXY_HOPS=1"
+            echo "SMTP_URL=smtp://127.0.0.1:54325"
+            echo "MAIL_FROM=LoyerCI <notifications@loyerci.local>"
+            echo "CRON_SECRET=$(openssl rand -hex 32)"
           } >> "$GITHUB_ENV"
       - run: npm run seed
       - run: npm run build

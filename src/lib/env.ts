@@ -31,6 +31,15 @@ const serverSchema = z
       .regex(/^\d{4,12}$/)
       .optional(),
     CINETPAY_SECRET_KEY: z.string().min(16).optional(),
+    // Notifications e-mail (P3.2) : SMTP de l'adresse unique LoyerCI. Absent = file conservée,
+    // rien n'est envoyé (la route d'expédition répond 503).
+    SMTP_URL: z
+      .string()
+      .regex(/^smtps?:\/\/[^\s]+$/, "SMTP_URL : smtp://… ou smtps://…")
+      .optional(),
+    MAIL_FROM: z.string().min(5).max(200).optional(),
+    // Secret de l'ordonnanceur (Vercel Cron : en-tête « Authorization: Bearer … »).
+    CRON_SECRET: z.string().min(32).optional(),
     // Raccourcis USSD (P1.3) : désactivés tant que le pilote ne les a pas validés sur de
     // vrais appareils. Ex. {"orange":"#144#"} ; aucun code n'est figé dans le code source.
     USSD_CODES_JSON: z
@@ -44,6 +53,7 @@ const serverSchema = z
         return z.NEVER;
       }),
   })
+  .refine((e) => !e.SMTP_URL || !!e.MAIL_FROM, { message: "MAIL_FROM requis avec SMTP_URL", path: ["MAIL_FROM"] })
   .refine(
     (e) =>
       [e.CINETPAY_API_KEY, e.CINETPAY_SITE_ID, e.CINETPAY_SECRET_KEY].every((v) => v === undefined) ||

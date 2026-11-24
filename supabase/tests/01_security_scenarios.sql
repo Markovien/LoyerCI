@@ -1791,4 +1791,116 @@ do $$ begin
   assert not has_function_privilege('authenticated', 'public.pispi_poster_data(uuid, uuid, inet, text)', 'execute'), 'affiche exposée au client';
 end $$;
 
+-- =============================================================================
+-- P3.2 — Notifications transactionnelles (file alimentée par le journal d'audit)
+-- =============================================================================
+do $$
+declare v_missing int;
+begin
+  -- Chaque déclaration journalisée (paiement direct, preuve de virement) a produit sa notification.
+  select count(*) into v_missing
+    from public.audit_logs a
+   where a.action in ('paiement_direct_declare', 'preuve_virement_soumise') and a.entity_type = 'payment'
+     and exists (select 1 from public.payments p where p.id = a.entity_id::uuid)
+     and not exists (select 1 from private.outbox o where o.kind = 'paiement_declare' and o.payload ->> 'payment_id' = a.entity_id);
+  assert v_missing = 0, format('%s déclaration(s) sans notification', v_missing);
+  -- Le locataire n'est prévenu que des décisions sur SES déclarations, jamais d'un encaissement
+  -- saisi par le bailleur.
+  assert not exists (
+    select 1 from private.outbox o
+      join public.payments p on p.id = (o.payload ->> 'payment_id')::uuid
+      join public.invoices i on i.id = p.invoice_id
+      join public.tenants t on t.id = i.tenant_id
+     where o.kind in ('paiement_confirme', 'paiement_rejete') and p.declared_by is distinct from t.user_id),
+    'notification au locataire pour un paiement qu''il n''a pas déclaré';
+  assert (select count(*) from private.outbox where kind = 'paiement_declare')
+       = (select count(distinct payload ->> 'payment_id') from private.outbox where kind = 'paiement_declare'), 'doublon dans la file';
+  raise notice 'OK  P3.2 file : chaque déclaration notifiée une fois ; locataire prévenu de ses seules déclarations';
+end $$;
+
+-- Rappel des déclarations en attente depuis plus de 48 h : une seule fois par déclaration
+update public.payments set created_at = now() - interval '3 days'
+ where id = (select id from public.payments where status = 'en_attente_validation' order by created_at limit 1);
+set role service_role;
+do $$
+declare n1 int; n2 int;
+begin
+  n1 := public.enqueue_stale_declarations();
+  n2 := public.enqueue_stale_declarations();
+  assert n1 >= 1 and n2 = 0, format('rappel 48 h : %s puis %s', n1, n2);
+  raise notice 'OK  P3.2 rappel des déclarations en attente depuis 48 h, sans doublon';
+end $$;
+
+-- Expédition : réservation, contenu, verrou, acquittement, échecs
+do $$
+declare
+  r      record;
+  n      int := 0;
+  v_ids  bigint[] := '{}';
+  v_keys text;
+begin
+  for r in select * from public.claim_notifications(100) loop
+    n := n + 1;
+    v_ids := v_ids || r.id;
+    assert jsonb_array_length(r.recipients) > 0, 'lot sans destinataire';
+    assert not exists (select 1 from jsonb_array_elements(r.recipients) e where e ->> 'email' !~ '^[^@\s]+@[^@\s]+$'), 'adresse invalide';
+    select string_agg(k, ',') into v_keys from jsonb_object_keys(r.data) k;
+    -- Invariant 9 : aucune coordonnée de paiement ni texte libre dans les données d'un message.
+    assert v_keys !~ '(iban|msisdn|numero|rib|alias|lien|motif|payer|proof)', format('donnée interdite dans %s : %s', r.kind, v_keys);
+    if r.kind in ('paiement_confirme', 'paiement_rejete') then
+      assert jsonb_array_length(r.recipients) = 1, 'une décision ne va qu''au locataire déclarant';
+    end if;
+    if r.kind = 'paiement_declare' then
+      assert not exists (select 1 from jsonb_array_elements(r.recipients) e where e ->> 'email' = 'gestion@akwaba-immo.ci'),
+        'le gestionnaire ne reçoit pas les déclarations (il ne confirme pas les encaissements)';
+    end if;
+  end loop;
+  assert n > 0, 'aucune notification réservée';
+  -- Verrou : un second expéditeur concurrent ne reprend pas le même lot.
+  assert not exists (select 1 from public.claim_notifications(100) c where c.id = any (v_ids)), 'lot réservé deux fois';
+  perform public.complete_notification(v_ids[1]);
+  assert (select count(*) from public.message_events where kind = 'email' and source = 'automatique') >= n, 'envois non comptés (D.5)';
+  perform set_config('test.p32_ids', array_to_string(v_ids[1:2], ','), false);
+  raise notice 'OK  P3.2 expédition : % message(s), sans coordonnée de paiement, verrouillés, comptés', n;
+end $$;
+reset role;
+-- Échecs : 5 tentatives au plus, puis abandon.
+update private.outbox set attempts = 5 where id = split_part(current_setting('test.p32_ids'), ',', 2)::bigint;
+set role service_role;
+select public.complete_notification(split_part(current_setting('test.p32_ids'), ',', 2)::bigint, 'smtp: 421 service indisponible') \g /dev/null
+reset role;
+do $$ begin
+  assert (select sent_at is not null from private.outbox where id = split_part(current_setting('test.p32_ids'), ',', 1)::bigint), 'acquittement non enregistré';
+  assert (select failed_at is not null and last_error like 'smtp%' from private.outbox where id = split_part(current_setting('test.p32_ids'), ',', 2)::bigint), 'abandon non enregistré';
+  raise notice 'OK  P3.2 acquittement, puis abandon après 5 échecs';
+end $$;
+
+-- Plafond quotidien : bloque les notifications ordinaires, jamais les alertes de sécurité
+update public.org_message_quotas set email_daily = 0 where org_id = 'c0000000-0000-4000-8000-000000000001';
+insert into private.outbox (org_id, kind, payload, dedupe_key)
+select 'c0000000-0000-4000-8000-000000000001', 'paiement_declare', jsonb_build_object('payment_id', p.id), 'test-plafond'
+  from public.payments p where p.org_id = 'c0000000-0000-4000-8000-000000000001' limit 1;
+insert into private.outbox (org_id, kind, payload, dedupe_key)
+values ('c0000000-0000-4000-8000-000000000001', 'alerte_compte_reception', '{"type": "mobile_money"}', 'test-alerte');
+set role service_role;
+do $$
+declare v_alert boolean := false;
+begin
+  select bool_or(c.kind = 'alerte_compte_reception') into v_alert from public.claim_notifications(100) c;
+  assert v_alert, 'alerte de sécurité bloquée par le plafond';
+end $$;
+reset role;
+do $$ begin
+  assert (select failed_at is not null and last_error like 'plafond%' from private.outbox where dedupe_key = 'test-plafond'),
+    'plafond quotidien non appliqué';
+  raise notice 'OK  P3.2 plafond quotidien appliqué en base ; alertes de sécurité toujours expédiées';
+end $$;
+update public.org_message_quotas set email_daily = 500 where org_id = 'c0000000-0000-4000-8000-000000000001';
+do $$ begin
+  assert not has_function_privilege('authenticated', 'public.claim_notifications(integer)', 'execute'), 'file exposée au client';
+  assert not has_function_privilege('authenticated', 'public.complete_notification(bigint, text)', 'execute'), 'acquittement exposé';
+  assert not has_function_privilege('authenticated', 'public.enqueue_stale_declarations()', 'execute'), 'rappel exposé';
+  assert not has_table_privilege('authenticated', 'private.outbox', 'select'), 'file lisible par le client';
+end $$;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

@@ -1111,7 +1111,18 @@ export type Database = {
         };
         Returns: undefined;
       };
+      claim_notifications: {
+        Args: { p_limit?: number };
+        Returns: {
+          data: Json;
+          id: number;
+          kind: string;
+          org_name: string;
+          recipients: Json;
+        }[];
+      };
       close_ended_leases: { Args: Record<PropertyKey, never>; Returns: number };
+      complete_notification: { Args: { p_error?: string; p_id: number }; Returns: undefined };
       confirm_provider_payment: {
         Args: {
           p_amount: number;
@@ -1211,6 +1222,7 @@ export type Database = {
           transfers_pending: number;
         }[];
       };
+      enqueue_stale_declarations: { Args: Record<PropertyKey, never>; Returns: number };
       fail_provider_payment: {
         Args: {
           p_ip: unknown;
