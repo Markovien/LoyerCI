@@ -1903,4 +1903,123 @@ do $$ begin
   assert not has_table_privilege('authenticated', 'private.outbox', 'select'), 'file lisible par le client';
 end $$;
 
+-- =============================================================================
+-- P3.3 — Relances de loyer (liste du jour, WhatsApp tracé, rappel e-mail optionnel)
+-- =============================================================================
+do $$ begin
+  assert private.reminder_step('2026-11-05', '2026-11-02', '{-3,3,10}') = -3, 'J-3';
+  assert private.reminder_step('2026-11-05', '2026-11-01', '{-3,3,10}') is null, 'avant J-3 : rien';
+  assert private.reminder_step('2026-11-05', '2026-11-09', '{-3,3,10}') = 3, 'J+4 -> étape J+3';
+  assert private.reminder_step('2026-11-05', '2026-11-25', '{-3,3,10}') = 10, 'J+20 -> étape J+10';
+  raise notice 'OK  P3.3 étape de relance : dernière échéance atteinte';
+end $$;
+-- Avis non soldé d'un locataire de l'organisation A disposant d'un e-mail (pour la suite)
+select set_config('test.p33_inv', (
+  select i.id::text from public.invoices i join public.tenants t on t.id = i.tenant_id
+   where i.org_id = 'c0000000-0000-4000-8000-000000000001' and i.status in ('a_payer', 'partiel', 'en_retard')
+     and coalesce(t.email, (select u.email from auth.users u where u.id = t.user_id)) is not null
+   order by i.due_date limit 1), false) \g /dev/null
+select set_config('test.p33_paid', (
+  select i.id::text from public.invoices i where i.org_id = 'c0000000-0000-4000-8000-000000000001' and i.status = 'paye' limit 1), false) \g /dev/null
+set role service_role;
+do $$
+declare
+  v_owner   constant uuid := 'a0000000-0000-4000-8000-000000000001';
+  v_manager constant uuid := 'a0000000-0000-4000-8000-000000000002';
+  v_org     constant uuid := 'c0000000-0000-4000-8000-000000000001';
+  v_inv     constant uuid := current_setting('test.p33_inv')::uuid;
+  v_events  int;
+begin
+  -- Réglages : propriétaire seul, valeurs bornées, triées et dédoublonnées
+  begin
+    perform public.set_reminder_settings(v_manager, v_org, '{-3,3,10}', true, null, null);
+    raise exception 'ÉCHEC : un gestionnaire règle les relances';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.set_reminder_settings(v_owner, v_org, '{1,2,3,4,5,6}', false, null, null);
+    raise exception 'ÉCHEC : 6 échéances acceptées';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.set_reminder_settings(v_owner, v_org, '{99}', false, null, null);
+    raise exception 'ÉCHEC : échéance hors bornes acceptée';
+  exception when invalid_parameter_value then null;
+  end;
+  perform public.set_reminder_settings(v_owner, v_org, '{10,3,-3,3}', true, '41.202.10.5', 'Chrome');
+  assert (select offsets = '{-3,3,10}' and email_enabled from public.org_reminder_settings where org_id = v_org), 'réglages non normalisés';
+
+  -- Relance WhatsApp tracée, une seule fois par étape
+  select count(*) into v_events from public.message_events where org_id = v_org and kind = 'whatsapp' and source = 'manuel';
+  assert public.record_reminder(v_manager, v_inv, 3::smallint, 'whatsapp', null, 'Chrome'), 'relance non enregistrée';
+  assert not public.record_reminder(v_owner, v_inv, 3::smallint, 'whatsapp', null, null), 'relance enregistrée deux fois';
+  assert (select count(*) from public.message_events where org_id = v_org and kind = 'whatsapp' and source = 'manuel') = v_events + 1,
+    'relance non comptée (D.5) ou comptée deux fois';
+  assert (select count(*) from public.audit_logs where action = 'relance_envoyee' and entity_id = v_inv::text) = 1, 'relance non journalisée';
+  begin
+    perform public.record_reminder(v_owner, v_inv, 7::smallint, 'whatsapp', null, null);
+    raise exception 'ÉCHEC : étape inconnue acceptée';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.record_reminder(v_owner, v_inv, 3::smallint, 'email_auto', null, null);
+    raise exception 'ÉCHEC : canal automatique déclaré à la main';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.record_reminder(v_owner, current_setting('test.p33_paid')::uuid, 3::smallint, 'whatsapp', null, null);
+    raise exception 'ÉCHEC : relance d''un avis soldé';
+  exception when raise_exception then null;
+  end;
+  begin
+    perform public.record_reminder('a0000000-0000-4000-8000-000000000003', v_inv, 3::smallint, 'whatsapp', null, null);
+    raise exception 'ÉCHEC : un locataire enregistre une relance';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.record_reminder('b0000000-0000-4000-8000-000000000001', v_inv, 3::smallint, 'whatsapp', null, null);
+    raise exception 'ÉCHEC : relance par une autre organisation';
+  exception when insufficient_privilege then null;
+  end;
+  raise notice 'OK  P3.3 relances : réglages (propriétaire, bornés), relance tracée une fois, comptée, cloisonnée';
+end $$;
+
+do $$
+declare
+  v_inv constant uuid := current_setting('test.p33_inv')::uuid;
+  v_due date;
+  n1 int; n2 int; n3 int;
+  r record;
+  v_keys text;
+begin
+  select due_date into v_due from public.invoices where id = v_inv;
+  n1 := public.enqueue_reminder_emails(v_due + 3);
+  n2 := public.enqueue_reminder_emails(v_due + 3);
+  n3 := public.enqueue_reminder_emails(v_due + 30); -- étape J+10 atteinte depuis 20 jours : trop ancienne
+  assert n1 >= 1 and n2 = 0, format('rappel e-mail : %s puis %s', n1, n2);
+  assert not exists (select 1 from public.invoice_reminders where invoice_id = v_inv and step = 10), 'rappel d''une étape ancienne';
+  assert exists (select 1 from public.invoice_reminders where invoice_id = v_inv and step = 3 and channel = 'email_auto'), 'rappel e-mail non tracé';
+  for r in select * from public.claim_notifications(100) c where c.kind = 'relance_loyer' loop
+    assert jsonb_array_length(r.recipients) = 1, 'un rappel ne va qu''au locataire';
+    select string_agg(k, ',') into v_keys from jsonb_object_keys(r.data) k;
+    assert v_keys !~ '(iban|msisdn|numero|rib|alias|lien|penalit)', format('donnée interdite : %s', v_keys);
+    assert (r.data ->> 'montant')::bigint > 0, 'montant restant absent';
+  end loop;
+  raise notice 'OK  P3.3 rappels e-mail : étapes récentes seulement, une fois, au locataire, sans coordonnée ni pénalité';
+end $$;
+reset role;
+do $$ begin
+  assert not has_function_privilege('authenticated', 'public.set_reminder_settings(uuid, uuid, smallint[], boolean, inet, text)', 'execute'), 'réglages exposés';
+  assert not has_function_privilege('authenticated', 'public.record_reminder(uuid, uuid, smallint, text, inet, text)', 'execute'), 'relance exposée';
+  assert not has_function_privilege('authenticated', 'public.enqueue_reminder_emails(date)', 'execute'), 'rappels exposés';
+  assert not has_table_privilege('authenticated', 'public.invoice_reminders', 'insert'), 'écriture client sur les relances';
+end $$;
+set role authenticated;
+set request.jwt.claim.sub = 'b0000000-0000-4000-8000-000000000001';
+do $$ begin
+  assert (select count(*) from public.invoice_reminders) = 0, 'relances d''une autre organisation visibles';
+  assert (select count(*) from public.org_reminder_settings) = 0, 'réglages d''une autre organisation visibles';
+end $$;
+reset role;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

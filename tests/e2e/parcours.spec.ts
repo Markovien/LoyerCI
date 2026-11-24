@@ -58,7 +58,8 @@ test.describe("propriétaire", () => {
   test("@desktop tableau de bord : KPIs et avis WhatsApp sans coordonnées de paiement", async ({ page }) => {
     await page.goto("/dashboard");
     await expect(page.getByText("Encaissé ce mois")).toBeVisible();
-    const href = await page.locator('a[href^="https://wa.me/"]').first().getAttribute("href");
+    // Lien de l'avis (les relances du jour, P3.3, n'ont pas de lien quand le locataire n'a pas de compte).
+    const href = await page.locator('a[href^="https://wa.me/"][href*="%2Fpay%2F"]').first().getAttribute("href");
     expect(href).toMatch(/^https:\/\/wa\.me\/225\d{10}\?text=/);
     const text = decodeURIComponent(href!.split("text=")[1]!);
     expect(text).toContain("/pay/");

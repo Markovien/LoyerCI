@@ -137,6 +137,52 @@ export type Database = {
           },
         ];
       };
+      invoice_reminders: {
+        Row: {
+          channel: string;
+          id: number;
+          invoice_id: string;
+          org_id: string;
+          sent_at: string;
+          sent_by: string | null;
+          step: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          channel: string;
+          id?: never;
+          invoice_id: string;
+          org_id: string;
+          sent_at?: string;
+          sent_by?: string | null;
+          step: number;
+        };
+        Update: {
+          channel?: string;
+          id?: never;
+          invoice_id?: string;
+          org_id?: string;
+          sent_at?: string;
+          sent_by?: string | null;
+          step?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "invoice_reminders_invoice_id_fkey";
+            columns: ["invoice_id"];
+            isOneToOne: false;
+            referencedRelation: "invoices";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "invoice_reminders_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       invoices: {
         Row: {
           amount_due: number | null;
@@ -535,6 +581,39 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "org_payment_settings_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: true;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      org_reminder_settings: {
+        Row: {
+          email_enabled: boolean;
+          offsets: number[];
+          org_id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          email_enabled?: boolean;
+          offsets?: number[];
+          org_id: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          email_enabled?: boolean;
+          offsets?: number[];
+          org_id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "org_reminder_settings_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: true;
             referencedRelation: "organizations";
@@ -1222,6 +1301,7 @@ export type Database = {
           transfers_pending: number;
         }[];
       };
+      enqueue_reminder_emails: { Args: { p_today?: string }; Returns: number };
       enqueue_stale_declarations: { Args: Record<PropertyKey, never>; Returns: number };
       fail_provider_payment: {
         Args: {
@@ -1364,6 +1444,17 @@ export type Database = {
         };
         Returns: string;
       };
+      record_reminder: {
+        Args: {
+          p_actor: string;
+          p_channel: string;
+          p_invoice: string;
+          p_ip: unknown;
+          p_step: number;
+          p_ua: string;
+        };
+        Returns: boolean;
+      };
       remove_member: {
         Args: { p_actor: string; p_ip: unknown; p_org: string; p_ua: string; p_user: string };
         Returns: undefined;
@@ -1409,6 +1500,17 @@ export type Database = {
           p_ip: unknown;
           p_org: string;
           p_transfer: boolean;
+          p_ua: string;
+        };
+        Returns: undefined;
+      };
+      set_reminder_settings: {
+        Args: {
+          p_actor: string;
+          p_email: boolean;
+          p_ip: unknown;
+          p_offsets: number[];
+          p_org: string;
           p_ua: string;
         };
         Returns: undefined;

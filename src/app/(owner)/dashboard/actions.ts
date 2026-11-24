@@ -306,3 +306,28 @@ export async function cancelReceipt(input: unknown): Promise<ActionResult> {
   revalidatePath("/dashboard");
   return { ok: true, message: "Quittance annulée : elle est désormais signalée « annulée » à la vérification." };
 }
+
+const reminderSchema = z.object({
+  invoiceId: uuid,
+  step: z.number().int().min(-15).max(60),
+  channel: z.enum(["whatsapp", "sms"]),
+});
+
+/** P3.3 — Relance envoyée depuis le compte du bailleur (WhatsApp ou SMS) : tracée en base. */
+export async function recordReminder(input: unknown): Promise<ActionResult> {
+  const g = await guard("reminder", 60);
+  if ("error" in g) return g.error!;
+  const parsed = reminderSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Requête invalide." };
+  const { error } = await supabaseAdmin().rpc("record_reminder", {
+    p_actor: g.user.id,
+    p_invoice: parsed.data.invoiceId,
+    p_step: parsed.data.step,
+    p_channel: parsed.data.channel,
+    p_ip: g.ctx.ip,
+    p_ua: g.ctx.userAgent,
+  });
+  if (error) return { ok: false, message: dbErrorMessage(error) };
+  revalidatePath("/dashboard");
+  return { ok: true, message: "Relance enregistrée." };
+}

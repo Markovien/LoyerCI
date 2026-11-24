@@ -15,6 +15,9 @@ import { DocumentsToSend, type DocumentItem } from "./_components/documents-to-s
 import { toAccountView } from "./parametres/paiements/types";
 import { RealtimeRefresh } from "./_components/realtime-refresh";
 import { OrgSwitcher } from "./_components/org-switcher";
+import { RemindersToday, type ReminderItem } from "./_components/reminders-today";
+import { buildReminderText, DEFAULT_REMINDER_OFFSETS, formatOffsets, reminderStep, stepLabel } from "@/lib/reminders";
+import { smsLink, whatsappLink } from "@/lib/whatsapp";
 
 export const metadata: Metadata = { title: "Tableau de bord" };
 
@@ -139,6 +142,58 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   });
 
   const orgName = membership.organizations?.name ?? "Mon organisation";
+
+  // P3.3 — Relances du jour (lectures RLS) : dernière échéance atteinte, pas encore traitée.
+  const today = new Date().toISOString().slice(0, 10); // Abidjan = UTC
+  const [{ data: reminderSettings }, { data: unpaid }] = await Promise.all([
+    supabase.from("org_reminder_settings").select("offsets").eq("org_id", orgId).maybeSingle(),
+    supabase
+      .from("invoices")
+      .select("id, period, due_date, amount_due, amount_paid, payment_reference, tenants(full_name, phone, user_id)")
+      .eq("org_id", orgId)
+      .in("status", ["a_payer", "partiel", "en_retard"])
+      .order("due_date"),
+  ]);
+  const offsets: readonly number[] = reminderSettings?.offsets ?? DEFAULT_REMINDER_OFFSETS;
+  const dueNow = (unpaid ?? [])
+    .map((i) => ({ i, step: reminderStep(i.due_date, today, offsets) }))
+    .filter((x): x is { i: (typeof x)["i"]; step: number } => x.step !== null);
+  const { data: done } = dueNow.length
+    ? await supabase
+        .from("invoice_reminders")
+        .select("invoice_id, step, channel")
+        .in(
+          "invoice_id",
+          dueNow.map((x) => x.i.id),
+        )
+    : { data: [] as { invoice_id: string; step: number; channel: string }[] };
+  const reminderItems: ReminderItem[] = dueNow
+    .filter(({ i, step }) => !(done ?? []).some((d) => d.invoice_id === i.id && d.step === step && d.channel !== "email_auto"))
+    .map(({ i, step }) => {
+      const t = i.tenants;
+      const text = buildReminderText({
+        tenantName: t?.full_name ?? "",
+        landlordName: orgName,
+        period: i.period,
+        remaining: i.amount_due - i.amount_paid,
+        dueDate: i.due_date,
+        reference: i.payment_reference,
+        step,
+        payUrl: t?.user_id ? `${appUrl}/pay/${i.id}` : null,
+      });
+      const phone = t?.phone && /^225\d{10}$/.test(t.phone) ? t.phone : null;
+      return {
+        invoiceId: i.id,
+        step,
+        stepLabel: stepLabel(step),
+        tenantName: t?.full_name ?? "Locataire",
+        period: i.period,
+        remaining: i.amount_due - i.amount_paid,
+        whatsappUrl: phone ? whatsappLink(phone, text) : null,
+        smsUrl: phone ? smsLink(phone, text) : null,
+        emailed: (done ?? []).some((d) => d.invoice_id === i.id && d.step === step && d.channel === "email_auto"),
+      };
+    });
   const roleLabel = { owner: "Propriétaire", manager: "Gestionnaire", accountant: "Comptable" }[membership.role];
 
   return (
@@ -212,6 +267,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <PendingAccountsBanner accounts={carenceViews} canCancel={membership.role === "owner"} />
 
       {canValidate && <PendingPayments rows={pendingRows} role={membership.role} />}
+
+      <RemindersToday items={reminderItems} offsetsLabel={formatOffsets(offsets)} />
 
       <DocumentsToSend items={docItems} periodLabel={formatPeriod(period)} />
 

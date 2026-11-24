@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireOrgMember } from "@/lib/auth/session";
 import { currentPeriod, formatPeriod } from "@/lib/format";
+import { DEFAULT_REMINDER_OFFSETS, formatOffsets } from "@/lib/reminders";
+import { ReminderSettingsForm } from "./reminder-settings";
 
 export const metadata: Metadata = { title: "Envois", robots: { index: false } };
 
@@ -26,9 +28,10 @@ export default async function UsagePage({ searchParams }: { searchParams: Promis
   if (membership.role !== "owner" && membership.role !== "accountant") redirect("/dashboard");
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.mois ?? "") ? `${sp.mois}-01` : currentPeriod();
 
-  const [{ data: rows }, { data: quota }] = await Promise.all([
+  const [{ data: rows }, { data: quota }, { data: reminders }] = await Promise.all([
     supabase.rpc("message_usage_summary", { p_org: membership.org_id, p_month: month }),
     supabase.from("org_message_quotas").select("sms_daily, otp_daily, email_daily").eq("org_id", membership.org_id).maybeSingle(),
+    supabase.from("org_reminder_settings").select("offsets, email_enabled").eq("org_id", membership.org_id).maybeSingle(),
   ]);
   const lines = rows ?? [];
   const billable = lines.filter((l) => l.billable).reduce((n, l) => n + Number(l.total), 0);
@@ -102,6 +105,22 @@ export default async function UsagePage({ searchParams }: { searchParams: Promis
               Plafonds quotidiens anti-abus : {quota.sms_daily} SMS, {quota.otp_daily} codes, {quota.email_daily} e-mails automatiques.
             </p>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Relances de loyer</CardTitle>
+          <CardDescription>
+            Chaque jour, le tableau de bord liste les locataires à relancer ; le message part de votre WhatsApp en un geste.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ReminderSettingsForm
+            offsets={formatOffsets(reminders?.offsets ?? DEFAULT_REMINDER_OFFSETS)}
+            email={reminders?.email_enabled ?? false}
+            canEdit={membership.role === "owner"}
+          />
         </CardContent>
       </Card>
     </div>

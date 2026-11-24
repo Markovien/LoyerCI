@@ -17,6 +17,7 @@ const KINDS = [
   "alerte_compte_reception",
   "depart_locataire",
   "rappel_suppression_compte",
+  "relance_loyer",
 ] as const satisfies readonly NotificationKind[];
 
 const recipientsSchema = z.array(z.object({ email: z.email().max(200), name: z.string().max(120) })).max(50);
