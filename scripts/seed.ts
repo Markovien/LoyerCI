@@ -303,6 +303,52 @@ async function main() {
     "Bamba",
   );
 
+  // Paiements directs (P1.8) sur les avis du mois suivant : une déclaration en attente de
+  // confirmation par le bailleur, une confirmée (quittance émise).
+  const next = monthStart(1);
+  await must(db.rpc("generate_monthly_invoices", { p_period: next }), "avis M+1");
+  const nextInv = await must(db.from("invoices").select("id, tenant_id, amount_due").eq("period", next), "lecture avis M+1");
+  const invNext = (tenant: string) => nextInv.find((i) => i.tenant_id === tid(tenant))!;
+  await must(
+    db.rpc("submit_direct_payment", {
+      p_actor: kouassi,
+      p_invoice: invNext("Kouassi").id,
+      p_operator: "wave",
+      p_amount: invNext("Kouassi").amount_due,
+      p_txn_ref: `T${randomUUID().replace(/-/g, "").slice(0, 14).toUpperCase()}`,
+      p_payer_msisdn: "2250707123456",
+      p_proof_path: null,
+      p_ip: "41.66.10.20",
+      p_ua: "seed",
+    }),
+    "déclaration directe en attente",
+  );
+  const declared = await must(
+    db.rpc("submit_direct_payment", {
+      p_actor: traore,
+      p_invoice: invNext("Traoré").id,
+      p_operator: "orange",
+      p_amount: invNext("Traoré").amount_due,
+      p_txn_ref: `MP${randomUUID().replace(/-/g, "").slice(0, 14).toUpperCase()}`,
+      p_payer_msisdn: "2250505987654",
+      p_proof_path: null,
+      p_ip: "41.66.9.9",
+      p_ua: "seed",
+    }),
+    "déclaration directe",
+  );
+  await must(
+    db.rpc("review_manual_payment", {
+      p_actor: owner,
+      p_payment: declared,
+      p_approve: true,
+      p_reason: null,
+      p_ip: "127.0.0.1",
+      p_ua: "seed",
+    }),
+    "confirmation de la déclaration directe",
+  );
+
   await must(db.rpc("mark_overdue_invoices"), "retards");
 
   console.log("\n✅ Données de démonstration prêtes.");

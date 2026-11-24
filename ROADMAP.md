@@ -96,8 +96,9 @@ Référence : `docs/ETUDE-PAIEMENT-DIRECT.md` §5. **Aucune modification des mig
 - Réalisé : paquet officiel `@pi-spi/qrcode` 1.0.0 (publié par la BCEAO, code relu : aucun accès réseau ni fichier), version figée. API réelle : `buildPayloadString` / `isValidPispiQrPayload` ; l'alias doit être une **adresse de paiement UUID v4**. Fonction `pispi_poster_data` (owner/gestionnaire, adresse active uniquement : ni carence, ni révocation, ni numéro de téléphone ; audit `affiche_guichet_generee` avec alias tronqué), route `GET /api/pispi-poster?account=…`, PDF A5 (étapes numérotées, nom du bénéficiaire à comparer, mention « guichet uniquement »), bouton dans Réception des fonds. Garde-fous : test statique (seule la route de l'affiche produit un QR PI-SPI, jamais un composant client) et e2e (aucune page locataire ni avis ne contient `int.bceao.pi`).
 - **Écart sur l'acceptation :** les pages de la démo BCEAO ne sont pas lisibles sans navigateur (rendu JavaScript) et l'exemple officiel au CRC `9618` n'a pas pu être récupéré. Remplacé par : validation par le validateur officiel du paquet BCEAO, recalcul indépendant du CRC et valeur de contrôle normalisée CRC-16/CCITT-FALSE (`123456789` → `29B1`). **Reste à faire à la main** : scanner une affiche imprimée avec l'application d'un établissement participant (liste de contrôle de mise en production).
 
-### P1.8 Documentation et nettoyage
+### P1.8 Documentation et nettoyage (fait le 24/11/2026)
 - Mettre à jour `README.md`, `docs/ANALYSE.md` §2.1-4 (état PI-SPI de novembre 2026) et le seed (comptes Wave/OM du bailleur, une déclaration directe en attente, une confirmée).
+- Réalisé : README réécrit (positionnement bailleur, comptes de démo par rôle, commandes et nombres de tests, arborescence, liste de contrôle de mise en production à jour) ; ANALYSE §2.1-4 complétée par la mise en œuvre de P1.7 ; seed : adresse de paiement PI-SPI, déclaration directe Wave en attente (Kouassi) et Orange confirmée par la propriétaire (Traoré), sur les avis du mois suivant.
 
 ---
 

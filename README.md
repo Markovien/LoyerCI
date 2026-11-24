@@ -1,10 +1,19 @@
 # LoyerCI — Gestion locative sécurisée pour la Côte d'Ivoire
 
-PWA Next.js 16 + Supabase : avis d'échéance partagés par WhatsApp, paiement Mobile Money
-(Orange Money, MTN MoMo, Wave, Moov Money via CinetPay) ou virement avec référence unique,
-quittances signées vérifiables par QR code. Devise : franc CFA (XOF), montants entiers.
+PWA Next.js 16 + Supabase, pensée d'abord pour le **bailleur** (propriétaire, agence, gestionnaire, comptable) :
+parc, locataires, baux, avis d'échéance signés, encaissements, quittances signées vérifiables, équipe et
+journal d'audit. Le locataire, souvent peu à l'aise avec le numérique, **reçoit** ses avis et quittances
+(e-mail, WhatsApp) et peut en vérifier l'authenticité ; un compte locataire est facultatif.
+Devise : franc CFA (XOF), montants entiers. Interface en français (fr-CI), mobile d'abord (390 px).
 
-👉 Lire d'abord **[docs/ANALYSE.md](docs/ANALYSE.md)** (modèle de sécurité), **[docs/AUDIT-SECURITE.md](docs/AUDIT-SECURITE.md)** (audit du 18/11/2026), **[docs/ETUDE-PAIEMENT-DIRECT.md](docs/ETUDE-PAIEMENT-DIRECT.md)** (paiement sans agrégateur) et **[ROADMAP.md](ROADMAP.md)** (suite du développement, à donner à Claude Code avec `CLAUDE.md`).
+**Les fonds ne transitent jamais par LoyerCI** : le locataire paie directement sur les comptes du bailleur
+(Mobile Money, virement, alias PI-SPI, espèces), puis le bailleur confirme la réception. CinetPay reste une
+option.
+
+👉 Lire d'abord **[ROADMAP.md](ROADMAP.md)** (avancement et décisions), **[docs/ANALYSE.md](docs/ANALYSE.md)**
+(modèle de sécurité), **[docs/AUDIT-SECURITE.md](docs/AUDIT-SECURITE.md)** (failles corrigées, risques ouverts),
+**[docs/ETUDE-PAIEMENT-DIRECT.md](docs/ETUDE-PAIEMENT-DIRECT.md)** (stratégie de paiement) et
+**[CLAUDE.md](CLAUDE.md)** (invariants de sécurité à ne jamais enfreindre).
 
 ## Démarrage local
 
@@ -13,20 +22,32 @@ npm install
 supabase start                       # Docker requis
 supabase db reset                    # migrations + secret Vault de dev (supabase/seed.sql)
 cp .env.example .env.local           # renseigner les clés affichées par `supabase status`
-npm run seed                         # données de démonstration (Cocody, Marcory, Bouaké…)
+npm run seed                         # données de démonstration (Cocody, Marcory, Yopougon, Bouaké…)
 npm run dev
 ```
 
-Comptes de démonstration (connexion par lien magique, boîte mail locale sur http://127.0.0.1:54324) :
-propriétaire `adjoua.coulibaly@akwaba-immo.ci`, locataire `jm.kouassi@exemple.ci`
-(Villa Duplex 5 pièces, Cocody Riviera 3, loyer 450 000 FCFA).
+Connexion par lien magique (boîte mail locale : http://127.0.0.1:54324). Comptes de démonstration :
+
+| Rôle | E-mail | Ce qu'on y voit |
+|---|---|---|
+| Propriétaire | `adjoua.coulibaly@akwaba-immo.ci` | Tout : encaissements à confirmer, réception des fonds, équipe, journal |
+| Comptable | `compta@akwaba-immo.ci` | Encaissements, envois ; espèces au-delà du seuil soumises à la propriétaire |
+| Locataire | `jm.kouassi@exemple.ci` | Villa Duplex 5 pièces, Cocody Riviera 3, 450 000 FCFA |
+
+Le seed contient notamment les comptes Orange Money et Wave du bailleur, une adresse de paiement PI-SPI
+(affiche de guichet), un virement à valider, des espèces au-delà du seuil à confirmer, une déclaration de
+paiement direct **en attente** et une **confirmée** (quittance émise).
 
 ## Tests
 
+Une tâche n'est terminée que si tout passe :
+
 ```bash
-npm run test:db     # 43 scénarios de sécurité sur un PostgreSQL éphémère (RLS, idempotence, audit, privilèges…)
-npm test            # tests unitaires (HMAC, Zod, références, formats)
-npm run typecheck && npm run build
+npm run lint && npm run typecheck
+npm test            # 47 tests unitaires (signatures, Zod, références, fichiers, CSV, payload PI-SPI, garde-fous)
+npm run test:db     # 76 scénarios de sécurité + 3 tests de concurrence sur un PostgreSQL éphémère
+npm run build
+npm run e2e         # 47 tests Playwright (16 suites) contre l'environnement local seedé, à 390 px
 ```
 
 `test:db` nécessite `initdb`/`pg_ctl` (PostgreSQL 15+) et un utilisateur non-root.
@@ -35,50 +56,53 @@ npm run typecheck && npm run build
 
 ```
 loyerci/
-├── docs/ANALYSE.md                     Analyse critique + modèle de menace
+├── ROADMAP.md, CLAUDE.md               Feuille de route + invariants de sécurité
+├── docs/                               Analyse, audit de sécurité, étude du paiement direct
 ├── supabase/
-│   ├── migrations/
-│   │   ├── …0100_schema.sql            Tables, contraintes métier/légales, audit chaîné, immuabilité
-│   │   ├── …0200_rls.sql               RLS sur toutes les tables, privilèges en lecture seule
-│   │   ├── …0300_business_functions.sql Fonctions métier transactionnelles (paiement, quittance, RIB…)
-│   │   └── …0400_platform.sql          Bucket privé, Realtime, planification pg_cron
-│   ├── seed.sql                        Secret Vault de développement
+│   ├── migrations/                     Schéma, RLS, fonctions SECURITY DEFINER (jamais modifiées : on en ajoute)
+│   │   └── *_platform*.sql             Storage, Realtime, pg_cron (propres à Supabase, hors test:db)
 │   └── tests/                          Émulation Supabase + scénarios de sécurité SQL
-├── scripts/
-│   ├── seed.ts                         Données de démo réalistes (local uniquement)
-│   └── test-db.sh                      Lanceur des tests SQL (+ test de concurrence)
+├── scripts/                            Seed (local uniquement), lanceur test:db, garde-fou d'imports
 ├── src/
 │   ├── proxy.ts                        CSP à nonce, session Supabase, garde de routes
 │   ├── app/
-│   │   ├── (owner)/dashboard/          ★ Tableau de bord propriétaire
-│   │   │   ├── page.tsx                  KPIs, virements à valider, avis du mois
-│   │   │   ├── actions.ts                Valider/rejeter virement, voir preuve, espèces
-│   │   │   └── _components/              KPI, liste d'avis, partage WhatsApp/SMS/e-mail, temps réel
-│   │   ├── (tenant)/pay/               ★ Module de paiement locataire
-│   │   │   ├── page.tsx                  Mes avis
-│   │   │   └── [invoiceId]/              Mobile Money (Orange/MTN/Wave/Moov) + virement & preuve, retour
-│   │   ├── verify/[receiptId]/         ★ Vérification publique de quittance (QR code)
-│   │   ├── api/webhooks/payment/       Webhook signé HMAC, revérifié, idempotent
-│   │   ├── api/receipts/[id]/pdf/      Quittance PDF avec QR (accès RLS)
-│   │   ├── login/, auth/callback/      Connexion par lien magique
-│   │   └── manifest.ts                 PWA
+│   │   ├── (owner)/dashboard/          ★ Espace bailleur
+│   │   │   ├── page.tsx                  KPIs, encaissements à confirmer, documents à envoyer, avis du mois
+│   │   │   ├── biens/, locataires/, baux/  Parc, fiches et invitations, baux (avance, résiliation)
+│   │   │   ├── audit/                    Journal d'audit, filtres, export CSV, intégrité
+│   │   │   └── parametres/               Réception des fonds (carence 48 h), envois, équipe
+│   │   ├── (tenant)/pay/               ★ Espace locataire : avis, quittances, « J'ai payé »
+│   │   ├── verify/                     ★ Vérification publique des quittances et avis
+│   │   ├── invitation/[token]/         Rattachement d'un compte locataire (usage unique)
+│   │   └── api/                        PDF (avis, quittances, affiche PI-SPI), exports CSV, webhook signé
 │   ├── lib/
-│   │   ├── payments/                   Interface fournisseur, adaptateur CinetPay, référence
-│   │   ├── security/                   HMAC temps constant, IP fiable, débit, fichiers
-│   │   ├── supabase/                   Clients utilisateur / service_role / navigateur
-│   │   ├── validation/schemas.ts       Schémas Zod (téléphones CI, IBAN, montants XOF…)
-│   │   ├── receipts/pdf.ts             Génération de quittance (pdf-lib + QR)
-│   │   └── whatsapp.ts, format.ts      Avis d'échéance, formats FCFA/dates
-│   └── components/                     UI (style shadcn/ui), badges de statut
-└── tests/                              Tests unitaires Vitest
+│   │   ├── payments/                   Références, CinetPay (option), payload QR PI-SPI (affiche seule)
+│   │   ├── documents/, receipts/       PDF signés (pdf-lib, polices standard)
+│   │   ├── security/                   HMAC temps constant, IP fiable, débit, fichiers (octets magiques)
+│   │   ├── auth/session.ts             Utilisateur vérifié, organisation active
+│   │   └── validation/schemas.ts       Schémas Zod (téléphones CI, IBAN, montants XOF…)
+│   └── components/                     UI (style shadcn/ui)
+└── tests/                              Unitaires (Vitest) et e2e (Playwright)
 ```
+
+## Affiche de guichet PI-SPI
+
+La BCEAO interdit le QR PI-SPI pour les paiements à distance. LoyerCI ne le produit donc **que** sous forme
+d'affiche A5 imprimable, à poser au guichet (Réception des fonds → « Imprimer l'affiche de guichet ») :
+QR statique **sans montant**, nom du bénéficiaire à vérifier, consigne « indiquez la référence de votre
+avis ». Payload générée et revalidée par la bibliothèque officielle de la BCEAO `@pi-spi/qrcode`. Seule
+l'adresse de paiement PI-SPI (36 caractères) peut y figurer, jamais un numéro de téléphone ; pas d'affiche
+pendant la carence de 48 h. Un test vérifie qu'aucune page locataire ne contient de payload PI-SPI.
 
 ## Mise en production — liste de contrôle
 
+- [ ] Supabase en région UE (décision D3) et dossier ARTCI déposé ; durée légale de conservation des documents arrêtée
 - [ ] Secret Vault `receipt_signing_key` aléatoire (64 hex) : `select vault.create_secret(encode(gen_random_bytes(32),'hex'),'receipt_signing_key');`
-- [ ] `SUPABASE_SERVICE_ROLE_KEY` et `CINETPAY_SECRET_KEY` uniquement côté serveur (CinetPay : les trois clés ou aucune)
-- [ ] `CLIENT_IP_HEADER` adapté à l'hébergeur (Vercel : `x-real-ip`)
-- [ ] URL de notification CinetPay : `https://<domaine>/api/webhooks/payment?provider=cinetpay`
-- [ ] Limiteur de débit Redis, OTP SMS, alertes de changement de RIB
-- [ ] Déclaration ARTCI, politique de rétention, tests d'intrusion
-- [ ] Types générés : `npx supabase gen types typescript --local > src/types/supabase.ts`
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` (et, si CinetPay est utilisé, ses trois clés) uniquement côté serveur, jamais en `NEXT_PUBLIC_`
+- [ ] `CLIENT_IP_HEADER` / `TRUSTED_PROXY_HOPS` adaptés à l'hébergeur (Vercel : `x-real-ip`)
+- [ ] Inscription publique fermée sur le projet hébergé comme en local : `[auth] enable_signup = false`, **pas** celui de `[auth.email]`, qui couperait la connexion (M6) ; invitation seule (D1)
+- [ ] Limiteur de débit partagé (Redis), expédition des alertes de la file `private.outbox` (e-mail/SMS)
+- [ ] Export externe régulier de la tête de chaîne d'audit (`private.audit_chain_head()`)
+- [ ] Contrôle manuel d'une affiche PI-SPI imprimée avec l'application d'un établissement participant
+- [ ] Tests d'intrusion
+- [ ] Types à jour : `npm run gen:types`
