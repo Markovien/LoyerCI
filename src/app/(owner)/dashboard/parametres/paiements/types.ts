@@ -10,7 +10,11 @@ export interface AccountView {
   activatesAt: string;
   revokedAt: string | null;
   createdBy: string | null;
+  /** P1.7 : affiche de guichet possible (adresse de paiement PI-SPI active, jamais un téléphone). */
+  posterEligible: boolean;
 }
+
+const PAYMENT_ADDRESS = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const OPERATOR_NAMES: Record<string, string> = { orange: "Orange Money", mtn: "MTN MoMo", moov: "Moov Money", wave: "Wave" };
 
@@ -50,15 +54,17 @@ export function toAccountView(
         return { title: `Lien de paiement ${op ?? ""}`.trim(), coordinate: a.payment_link_url ?? "" };
     }
   })();
+  const status: AccountView["status"] = a.revoked_at ? "revoque" : new Date(a.activates_at).getTime() > now ? "carence" : "actif";
   return {
     id: a.id,
     kind: a.kind as AccountView["kind"],
     ...view,
     holder: a.account_holder,
     displayName: a.display_name_expected,
-    status: a.revoked_at ? "revoque" : new Date(a.activates_at).getTime() > now ? "carence" : "actif",
+    status,
     activatesAt: a.activates_at,
     revokedAt: a.revoked_at,
     createdBy: names.get(a.created_by) ?? null,
+    posterEligible: a.kind === "pispi_alias" && status === "actif" && PAYMENT_ADDRESS.test(a.pispi_alias ?? ""),
   };
 }

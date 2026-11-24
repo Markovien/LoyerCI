@@ -185,6 +185,11 @@ async function main() {
       await tx`insert into public.payout_accounts (org_id, kind, account_holder, pispi_alias, display_name_expected, activates_at, created_by)
                values (${orgId}, 'pispi_alias', 'AKWABA IMMOBILIER SARL', '+2250707000111', 'AKWABA IMMOBILIER',
                        now() - interval '49 hours', ${owner})`;
+      // Adresse de paiement PI-SPI (UUID v4, 36 caractères) : seule forme admise dans un QR,
+      // pour l'affiche de guichet (P1.7). Valeur de démonstration.
+      await tx`insert into public.payout_accounts (org_id, kind, account_holder, pispi_alias, display_name_expected, activates_at, created_by)
+               values (${orgId}, 'pispi_alias', 'AKWABA IMMOBILIER SARL', '3497a720-ab11-4973-9619-534e04f263a1', 'AKWABA IMMOBILIER',
+                       now() - interval '49 hours', ${owner})`;
     });
   } finally {
     await sql.end();

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useTransition } from "react";
-import { Ban, ShieldAlert } from "lucide-react";
+import { Ban, Printer, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatLongDate } from "@/lib/format";
@@ -49,6 +49,26 @@ export function AccountsList({ accounts, canCancel }: { accounts: AccountView[];
               )}
               {a.status === "revoque" && <Badge className="bg-muted">Révoqué le {formatLongDate(a.revokedAt!)}</Badge>}
             </div>
+            {a.posterEligible && (
+              <div className="mt-2 grid gap-1">
+                <Button asChild size="sm" variant="outline" className="justify-self-start">
+                  <a href={`/api/pispi-poster?account=${a.id}`} download>
+                    <Printer />
+                    Imprimer l&apos;affiche de guichet
+                  </a>
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  QR à afficher au guichet uniquement : la BCEAO interdit de l&apos;envoyer par message ou de l&apos;afficher dans une
+                  application.
+                </p>
+              </div>
+            )}
+            {a.kind === "pispi_alias" && a.status === "actif" && !a.posterEligible && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Affiche de guichet : ajoutez votre adresse de paiement PI-SPI (36 caractères, fournie par votre banque ou votre opérateur).
+                Un numéro de téléphone ne peut pas figurer dans un QR.
+              </p>
+            )}
             {canCancel && a.status !== "revoque" && (
               <Button
                 size="sm"

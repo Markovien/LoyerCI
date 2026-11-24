@@ -1732,4 +1732,63 @@ do $$ begin
   assert not has_function_privilege('authenticated', 'public.log_audit_export(uuid, uuid, jsonb, integer, inet, text)', 'execute'), 'export exposé au client';
 end $$;
 
-\echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ===
+-- =============================================================================
+-- P1.7 — Affiche de guichet PI-SPI (présentiel uniquement)
+-- =============================================================================
+insert into public.payout_accounts (id, org_id, kind, account_holder, display_name_expected, pispi_alias, activates_at, created_by, revoked_at) values
+  ('e1700000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 'pispi_alias', 'AKWABA IMMOBILIER SARL', 'AKWABA IMMOBILIER',
+   '3497a720-ab11-4973-9619-534e04f263a1', now() - interval '3 days', 'a0000000-0000-4000-8000-000000000001', null),
+  ('e1700000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000001', 'pispi_alias', 'AKWABA IMMOBILIER SARL', null,
+   '4497a720-ab11-4973-9619-534e04f263a2', now() + interval '1 day', 'a0000000-0000-4000-8000-000000000001', null),
+  ('e1700000-0000-4000-8000-000000000003', 'c0000000-0000-4000-8000-000000000001', 'pispi_alias', 'AKWABA IMMOBILIER SARL', null,
+   '+2250707000111', now() - interval '3 days', 'a0000000-0000-4000-8000-000000000001', null),
+  ('e1700000-0000-4000-8000-000000000004', 'c0000000-0000-4000-8000-000000000001', 'pispi_alias', 'AKWABA IMMOBILIER SARL', null,
+   '5497a720-ab11-4973-9619-534e04f263a3', now() - interval '3 days', 'a0000000-0000-4000-8000-000000000001', now());
+set role service_role;
+do $$
+declare
+  v_owner   constant uuid := 'a0000000-0000-4000-8000-000000000001';
+  v_manager constant uuid := 'a0000000-0000-4000-8000-000000000002';
+  r record;
+begin
+  select * into r from public.pispi_poster_data(v_manager, 'e1700000-0000-4000-8000-000000000001', '41.202.10.5', 'Chrome');
+  assert r.alias = '3497a720-ab11-4973-9619-534e04f263a1' and r.beneficiary = 'AKWABA IMMOBILIER', 'données de l''affiche';
+  assert char_length(r.reference_label) <= 25, 'référence trop longue pour le QR';
+  assert exists (select 1 from public.audit_logs where action = 'affiche_guichet_generee' and actor_id = v_manager
+                   and entity_id = 'e1700000-0000-4000-8000-000000000001' and metadata ->> 'alias' = '3497a720…'),
+         'affiche non tracée (ou alias complet journalisé)';
+  begin
+    perform public.pispi_poster_data('a0000000-0000-4000-8000-000000000005', 'e1700000-0000-4000-8000-000000000001', null, null);
+    raise exception 'ÉCHEC : un comptable génère une affiche';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.pispi_poster_data('b0000000-0000-4000-8000-000000000001', 'e1700000-0000-4000-8000-000000000001', null, null);
+    raise exception 'ÉCHEC : affiche d''une autre organisation';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.pispi_poster_data(v_owner, 'e1700000-0000-4000-8000-000000000002', null, null);
+    raise exception 'ÉCHEC : affiche pendant la carence';
+  exception when raise_exception then
+    if sqlerrm not like '%carence%' then raise; end if;
+  end;
+  begin
+    perform public.pispi_poster_data(v_owner, 'e1700000-0000-4000-8000-000000000003', null, null);
+    raise exception 'ÉCHEC : numéro de téléphone dans un QR';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.pispi_poster_data(v_owner, 'e1700000-0000-4000-8000-000000000004', null, null);
+    raise exception 'ÉCHEC : affiche de coordonnées révoquées';
+  exception when raise_exception then
+    if sqlerrm not like '%révoquées%' then raise; end if;
+  end;
+  raise notice 'OK  P1.7 affiche PI-SPI : owner/gestionnaire, adresse de paiement active uniquement (ni carence, ni révoquée, ni téléphone), tracée';
+end $$;
+reset role;
+do $$ begin
+  assert not has_function_privilege('authenticated', 'public.pispi_poster_data(uuid, uuid, inet, text)', 'execute'), 'affiche exposée au client';
+end $$;
+
+\echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

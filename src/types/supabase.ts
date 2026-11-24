@@ -1310,6 +1310,15 @@ export type Database = {
           departed_at: string;
         }[];
       };
+      pispi_poster_data: {
+        Args: { p_account: string; p_actor: string; p_ip: unknown; p_ua: string };
+        Returns: {
+          alias: string;
+          beneficiary: string;
+          org_name: string;
+          reference_label: string;
+        }[];
+      };
       process_tenant_retention: {
         Args: { p_now?: string };
         Returns: {
