@@ -10,6 +10,7 @@ const KINDS: NotificationKind[] = [
   "depart_locataire",
   "rappel_suppression_compte",
   "relance_loyer",
+  "purge_documents_prochaine",
 ];
 const ctx = { appUrl: "https://app.loyerci.ci/", orgName: "Akwaba Immobilier", recipientName: "Adjoua" };
 const data = {
@@ -24,6 +25,8 @@ const data = {
   echeance: "2026-11-05",
   etape: 3,
   compte: true,
+  nombre: 12,
+  a_partir_du: "2026-12-20T00:00:00Z",
   // Champs hostiles : ne doivent jamais apparaître dans un message (invariant 9).
   iban: "CI15CI0080111301340012530091",
   msisdn: "2250707000111",

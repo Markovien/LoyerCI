@@ -165,11 +165,12 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 ### P3.3 Relances automatiques (fait le 24/11/2026)
 - J-3, J+3, J+10 (configurables par organisation), via `pg_cron` et la file de notifications. Contenu sans aucune coordonnée de paiement (invariant n°9).
 - Réalisé (décision du 24/11) : tableau de bord « Relances du jour » (dernière échéance atteinte de chaque avis non soldé, pas encore traitée), envoi WhatsApp ou SMS en un geste depuis le téléphone du bailleur, relance tracée (`record_reminder` : registre en ajout seul, une fois par avis, étape et canal ; journal `relance_envoyee` ; compteur D.5 non facturé) ; réglages par organisation (`set_reminder_settings`, propriétaire, 1 à 5 échéances entre J-15 et J+60) sur la page Envois ; rappel automatique par e-mail **désactivé par défaut**, chaque jour à 08:10, seulement pour les étapes atteintes depuis 2 jours au plus (activer l'option ne déclenche pas d'avalanche), jamais pour un avis soldé entre-temps. Textes sans pénalité ni coordonnée ; lien vers l'espace seulement si le locataire a un compte (sinon aucun lien).
-### P3.4 Conservation des documents : 2 ans après émission (décision du 24/11/2026)
+### P3.4 Conservation des documents : 2 ans après émission (décision du 24/11/2026) (fait le 24/11/2026)
 - Purge quotidienne des avis, quittances et preuves de virement émis il y a plus de 2 ans (fichiers du stockage compris) ; jamais du journal d'audit.
 - Alerte au bailleur 30 jours avant (tableau de bord et e-mail) et export complet de ses documents (archive) avant la purge.
 - `/verify` d'un document purgé : « document plus conservé par LoyerCI » (ni « faux », ni « authentique »).
 - Historique du locataire : il est invité à télécharger ses documents ; rien n'est conservé au-delà.
+- Réalisé : purge quotidienne en base (`purge_expired_documents`, 03:30) ; pierre tombale minimale (n°, date, 16 premiers caractères du code) pour que `/verify` réponde « Document plus conservé » au bon code seulement ; déclencheurs d'immuabilité ne permettant la suppression que pendant la purge **et** après 2 ans ; preuves de virement détachées (`proof_purged_at`) et fichiers retirés par l'API Storage (`/api/cron/retention`, file `private.storage_deletions`) ; alerte e-mail J-30 aux propriétaires et comptables (une par mois de purge) et bandeau du tableau de bord ; export ZIP des PDF signés (`/api/export/documents`, 300 documents au plus, journalisé `documents_exportes`) ; mention dans l'espace locataire. Journal `documents_purges` par organisation.
 
 ---
 

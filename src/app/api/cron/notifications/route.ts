@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { serverEnv } from "@/lib/env";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { sha256Hex, safeEqualHex } from "@/lib/security/crypto";
+import { cronAuthorized } from "@/lib/security/cron";
 import { mailerConfigured, sendEmail } from "@/lib/notifications/mailer";
 import { renderNotification, type NotificationKind } from "@/lib/notifications/templates";
 
@@ -18,17 +18,10 @@ const KINDS = [
   "depart_locataire",
   "rappel_suppression_compte",
   "relance_loyer",
+  "purge_documents_prochaine",
 ] as const satisfies readonly NotificationKind[];
 
 const recipientsSchema = z.array(z.object({ email: z.email().max(200), name: z.string().max(120) })).max(50);
-
-/** Comparaison à temps constant du secret (empreintes de même longueur). */
-function authorized(req: NextRequest): boolean {
-  const secret = serverEnv().CRON_SECRET;
-  const header = req.headers.get("authorization") ?? "";
-  if (!secret || !header.startsWith("Bearer ")) return false;
-  return safeEqualHex(sha256Hex(header.slice(7)), sha256Hex(secret));
-}
 
 /**
  * P3.2 — Expédition des notifications e-mail, appelée par l'ordonnanceur de l'hébergeur
@@ -37,7 +30,7 @@ function authorized(req: NextRequest): boolean {
  * deux appels simultanés ne reprennent jamais le même message.
  */
 export async function GET(req: NextRequest) {
-  if (!authorized(req)) return new NextResponse("Non autorisé", { status: 401 });
+  if (!cronAuthorized(req)) return new NextResponse("Non autorisé", { status: 401 });
   if (!mailerConfigured()) return new NextResponse("SMTP non configuré : file conservée", { status: 503 });
 
   const db = supabaseAdmin();

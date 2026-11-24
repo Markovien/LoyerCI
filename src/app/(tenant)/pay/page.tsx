@@ -32,6 +32,9 @@ export default async function TenantHome() {
     <main className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-5">
       <Brand href="/pay" />
       <h1 className="text-xl font-semibold">Mes avis et quittances</h1>
+      <p className="text-sm text-muted-foreground">
+        Vos documents sont conservés 2 ans après leur émission. Téléchargez vos quittances pour les garder plus longtemps.
+      </p>
 
       {deletion?.deletion_at && (
         <section
@@ -45,7 +48,7 @@ export default async function TenantHome() {
           </p>
           <p>
             Vous n&apos;avez plus de bail en cours. Téléchargez dès maintenant vos quittances et avis ci-dessous et conservez-les : ils
-            prouvent vos paiements (dossier de location, visa, prêt). Ils resteront vérifiables en ligne.
+            prouvent vos paiements (dossier de location, visa, prêt). Ils restent vérifiables en ligne 2 ans après leur émission.
           </p>
         </section>
       )}

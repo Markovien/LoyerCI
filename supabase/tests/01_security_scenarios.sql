@@ -2022,4 +2022,103 @@ do $$ begin
 end $$;
 reset role;
 
+-- =============================================================================
+-- P3.4 — Conservation des documents : 2 ans après émission
+-- =============================================================================
+-- Préparation (superutilisateur) : une quittance, un avis et une preuve « vieillis » de plus de
+-- 2 ans ; une quittance qui atteindra 2 ans dans 10 jours (alerte).
+select set_config('test.p34_r', (select id::text from public.receipts where org_id = 'c0000000-0000-4000-8000-000000000001' order by issued_at limit 1), false) \g /dev/null
+select set_config('test.p34_r2', (select id::text from public.receipts where org_id = 'c0000000-0000-4000-8000-000000000001' order by issued_at offset 1 limit 1), false) \g /dev/null
+select set_config('test.p34_n', (select id::text from public.notices where org_id = 'c0000000-0000-4000-8000-000000000001' order by issued_at limit 1), false) \g /dev/null
+select set_config('test.p34_p', (select id::text from public.payments where org_id = 'c0000000-0000-4000-8000-000000000001' and proof_path is not null limit 1), false) \g /dev/null
+alter table public.receipts disable trigger receipts_immutable;
+alter table public.notices disable trigger notices_immutable;
+update public.receipts set issued_at = now() - interval '2 years 1 day' where id = current_setting('test.p34_r')::uuid;
+update public.receipts set issued_at = now() - interval '2 years' + interval '10 days' where id = current_setting('test.p34_r2')::uuid;
+update public.notices set issued_at = now() - interval '2 years 1 day' where id = current_setting('test.p34_n')::uuid;
+alter table public.receipts enable trigger receipts_immutable;
+alter table public.notices enable trigger notices_immutable;
+update public.payments set created_at = now() - interval '2 years 1 day' where id = current_setting('test.p34_p')::uuid;
+select set_config('test.p34_code', (select left(signature, 16) from public.receipts where id = current_setting('test.p34_r')::uuid), false) \g /dev/null
+select set_config('test.p34_ncode', (select left(signature, 16) from public.notices where id = current_setting('test.p34_n')::uuid), false) \g /dev/null
+select set_config('test.p34_path', (select proof_path from public.payments where id = current_setting('test.p34_p')::uuid), false) \g /dev/null
+
+do $$ begin
+  -- Hors purge, la suppression reste interdite, même pour un document de plus de 2 ans...
+  begin
+    delete from public.receipts where id = current_setting('test.p34_r')::uuid;
+    raise exception 'ÉCHEC : quittance supprimée hors purge';
+  exception when insufficient_privilege then null;
+  end;
+  -- ... et pendant la purge, un document de moins de 2 ans reste protégé.
+  perform set_config('loyerci.purge', 'on', true);
+  begin
+    delete from public.receipts where id = current_setting('test.p34_r2')::uuid;
+    raise exception 'ÉCHEC : quittance récente supprimée';
+  exception when insufficient_privilege then null;
+  end;
+  perform set_config('loyerci.purge', 'off', true);
+  raise notice 'OK  P3.4 immuabilité : suppression seulement par la purge et après 2 ans';
+end $$;
+
+set role service_role;
+do $$
+declare
+  r   record;
+  v_q int := 0; v_a int := 0; v_p int := 0;
+begin
+  for r in select * from public.purge_expired_documents() loop
+    v_q := v_q + r.quittances; v_a := v_a + r.avis; v_p := v_p + r.preuves;
+  end loop;
+  assert v_q = 1 and v_a = 1 and v_p >= 1, format('purge : %s quittance(s), %s avis, %s preuve(s)', v_q, v_a, v_p);
+  assert not exists (select 1 from public.receipts where id = current_setting('test.p34_r')::uuid), 'quittance non purgée';
+  assert exists (select 1 from public.receipts where id = current_setting('test.p34_r2')::uuid), 'quittance récente purgée';
+  assert not exists (select 1 from public.notices where id = current_setting('test.p34_n')::uuid), 'avis non purgé';
+  assert (select proof_path is null from public.payments where id = current_setting('test.p34_p')::uuid), 'preuve non détachée';
+
+  -- /verify : « plus conservé » avec le bon code, « invalide » sinon (pas d'énumération)
+  select * into r from public.verify_receipt(current_setting('test.p34_r')::uuid, current_setting('test.p34_code'));
+  assert r.verdict = 'plus_conserve' and r.receipt_number is not null and r.landlord_name is null and r.amount is null,
+    'verdict après purge';
+  select * into r from public.verify_receipt(current_setting('test.p34_r')::uuid, 'ffffffffffffffff');
+  assert r.verdict = 'invalide', 'un mauvais code révèle un document purgé';
+  select * into r from public.verify_notice(current_setting('test.p34_n')::uuid, current_setting('test.p34_ncode'));
+  assert r.verdict = 'plus_conserve', 'avis purgé : verdict';
+
+  -- Fichier de preuve mis en file, retiré par le serveur puis acquitté
+  select * into r from public.claim_storage_deletions(100) c where c.path = current_setting('test.p34_path');
+  assert r.bucket = 'transfer-proofs', 'preuve non mise en file de suppression';
+  perform public.complete_storage_deletion(r.id);
+  assert not exists (select 1 from public.claim_storage_deletions(100) c where c.path = current_setting('test.p34_path')),
+    'fichier repris après acquittement';
+  raise notice 'OK  P3.4 purge : quittance, avis et preuve de plus de 2 ans ; /verify « plus conservé » au bon code seulement';
+end $$;
+
+do $$
+declare n1 int; n2 int;
+begin
+  n1 := public.enqueue_purge_alerts();
+  n2 := public.enqueue_purge_alerts();
+  assert n1 >= 1 and n2 = 0, format('alerte J-30 : %s puis %s', n1, n2);
+  begin
+    perform public.log_documents_export('a0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000001', 3, null, null);
+    raise exception 'ÉCHEC : un gestionnaire exporte les documents';
+  exception when insufficient_privilege then null;
+  end;
+  perform public.log_documents_export('a0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 3, '41.202.10.5', 'Chrome');
+  raise notice 'OK  P3.4 alerte 30 jours avant (une fois) ; export réservé au propriétaire et au comptable';
+end $$;
+reset role;
+do $$ begin
+  assert exists (select 1 from public.audit_logs where action = 'documents_purges' and actor_kind = 'system'
+                   and (metadata ->> 'quittances')::int = 1), 'purge non journalisée';
+  assert exists (select 1 from public.audit_logs where action = 'documents_exportes' and (metadata ->> 'documents')::int = 3), 'export non journalisé';
+  assert exists (select 1 from private.outbox where kind = 'purge_documents_prochaine' and org_id = 'c0000000-0000-4000-8000-000000000001'),
+    'alerte non mise en file';
+  assert not has_function_privilege('authenticated', 'public.purge_expired_documents()', 'execute'), 'purge exposée';
+  assert not has_function_privilege('authenticated', 'public.claim_storage_deletions(integer)', 'execute'), 'file de suppression exposée';
+  assert not has_function_privilege('authenticated', 'public.log_documents_export(uuid, uuid, integer, inet, text)', 'execute'), 'export exposé';
+  assert not has_table_privilege('authenticated', 'private.purged_documents', 'select'), 'pierres tombales lisibles';
+end $$;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

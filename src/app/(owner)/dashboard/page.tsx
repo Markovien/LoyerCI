@@ -16,6 +16,8 @@ import { toAccountView } from "./parametres/paiements/types";
 import { RealtimeRefresh } from "./_components/realtime-refresh";
 import { OrgSwitcher } from "./_components/org-switcher";
 import { RemindersToday, type ReminderItem } from "./_components/reminders-today";
+import { RetentionBanner } from "./_components/retention-banner";
+import { purgeDate, retentionCutoff } from "@/lib/retention";
 import { buildReminderText, DEFAULT_REMINDER_OFFSETS, formatOffsets, reminderStep, stepLabel } from "@/lib/reminders";
 import { smsLink, whatsappLink } from "@/lib/whatsapp";
 
@@ -143,6 +145,30 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const orgName = membership.organizations?.name ?? "Mon organisation";
 
+  // P3.4 — Documents qui atteindront 2 ans dans les 30 jours (propriétaire, comptable).
+  const soon = retentionCutoff(new Date(), 30).toISOString();
+  const [expReceipts, expNotices] = canValidate
+    ? await Promise.all([
+        supabase
+          .from("receipts")
+          .select("issued_at", { count: "exact" })
+          .eq("org_id", orgId)
+          .lt("issued_at", soon)
+          .order("issued_at")
+          .limit(1),
+        supabase
+          .from("notices")
+          .select("issued_at", { count: "exact" })
+          .eq("org_id", orgId)
+          .lt("issued_at", soon)
+          .order("issued_at")
+          .limit(1),
+      ])
+    : [null, null];
+  const expiringCount = (expReceipts?.count ?? 0) + (expNotices?.count ?? 0);
+  const oldest = [expReceipts?.data?.[0]?.issued_at, expNotices?.data?.[0]?.issued_at].filter((d): d is string => !!d).sort()[0];
+  const expiringFrom = oldest ? purgeDate(oldest).toISOString() : null;
+
   // P3.3 — Relances du jour (lectures RLS) : dernière échéance atteinte, pas encore traitée.
   const today = new Date().toISOString().slice(0, 10); // Abidjan = UTC
   const [{ data: reminderSettings }, { data: unpaid }] = await Promise.all([
@@ -265,6 +291,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <KpiGrid k={kpis.data ?? EMPTY_KPIS} />
 
       <PendingAccountsBanner accounts={carenceViews} canCancel={membership.role === "owner"} />
+
+      <RetentionBanner count={expiringCount} from={expiringFrom} />
 
       {canValidate && <PendingPayments rows={pendingRows} role={membership.role} />}
 

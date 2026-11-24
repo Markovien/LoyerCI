@@ -121,6 +121,8 @@ Chaque faille a été **démontrée** avant correction, puis le PoC a été rejo
 | 🟢 Faible | Le locataire peut lire les UUID `declared_by`/`validated_by` de ses paiements | P0.2 (vue dédiée) |
 | 🟢 Faible | Verrou consultatif global sur l'audit : sérialise toutes les écritures sensibles | Acceptable au volume du pilote ; à mesurer en P4.5 |
 | 🟢 Faible | `CLIENT_IP_HEADER` mal réglé = IP falsifiable (audit et limiteur) | Liste de contrôle de mise en production |
+| 🟡 Moyenne | **Purge des documents (P3.4)** : la suppression des quittances et avis passe par un réglage local à la transaction (`loyerci.purge`), en plus de la condition « plus de 2 ans ». Aucun rôle applicatif ne peut exécuter de SQL arbitraire pour le poser ; un accès superutilisateur le peut (comme il peut tout). | Accès superutilisateur réservé, journalisé (P4.6, P4.7) |
+| 🟢 Faible | Notifications e-mail (P3.2) : la route d'expédition est protégée par `CRON_SECRET` ; un secret divulgué permet seulement de déclencher plus tôt l'envoi de messages déjà en file (contenu et destinataires fixés en base) | Rotation du secret ; liste de contrôle de mise en production |
 
 ### 3.2 Décisions du porteur de projet (arbitrées le 18/11/2026)
 > **D1 → invitation seule** : inscription publique désactivée (`supabase/config.toml`, P0.1) ; bailleurs créés par l'équipe LoyerCI, locataires et membres par lien d'invitation à usage unique (P2.2, P2.5).

@@ -46,6 +46,8 @@ export const AUDIT_ACTIONS = {
   audit_exporte: "Journal exporté",
   relances_parametrees: "Relances paramétrées",
   relance_envoyee: "Relance envoyée",
+  documents_purges: "Documents de plus de 2 ans supprimés",
+  documents_exportes: "Documents exportés",
 } as const satisfies Record<string, string>;
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;

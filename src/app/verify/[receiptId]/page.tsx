@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 };
 export const dynamic = "force-dynamic";
 
-const verdictSchema = z.enum(["authentique", "annulee", "invalide", "alteree"]);
+const verdictSchema = z.enum(["authentique", "annulee", "invalide", "alteree", "plus_conserve"]);
 
 type View = { kind: "form"; error?: string } | { kind: "throttled" } | { kind: "result"; r: DocumentVerdict };
 
@@ -57,7 +57,7 @@ async function resolve(receiptId: string, code: string | undefined): Promise<Vie
         location: rc.property_location,
         period: rc.period,
         amount: rc.amount,
-        date: rc.paid_at,
+        date: rv.data === "plus_conserve" ? rc.issued_at : rc.paid_at,
         fingerprint: rc.fingerprint,
         revokedAt: rc.revoked_at,
       },
@@ -78,7 +78,7 @@ async function resolve(receiptId: string, code: string | undefined): Promise<Vie
       location: nc.property_location,
       period: nc.period,
       amount: nc.amount_due,
-      date: nc.due_date,
+      date: nv.data === "plus_conserve" ? nc.issued_at : nc.due_date,
       fingerprint: nc.fingerprint,
       revokedAt: null,
     },

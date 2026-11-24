@@ -15,7 +15,8 @@ export type NotificationKind =
   | "alerte_compte_reception"
   | "depart_locataire"
   | "rappel_suppression_compte"
-  | "relance_loyer";
+  | "relance_loyer"
+  | "purge_documents_prochaine";
 
 export interface RenderedEmail {
   subject: string;
@@ -152,6 +153,20 @@ export function renderNotification(
         // Sans compte, aucun lien : le locataire ne pourrait pas se connecter (et un lien de
         // moins, c'est une prise de moins pour l'hameçonnage).
         hasAccount && invoice ? { label: "Voir mon avis", url: `${app}/pay/${invoice}` } : null,
+        org,
+      );
+    }
+    case "purge_documents_prochaine": {
+      const when = str(data.a_partir_du) ? formatLongDate(str(data.a_partir_du)) : "";
+      const n = num(data.nombre);
+      return build(
+        `${n} document${n > 1 ? "s" : ""} bientôt supprimé${n > 1 ? "s" : ""} : pensez à les exporter`,
+        [
+          hello,
+          `LoyerCI conserve les avis et quittances 2 ans après leur émission. ${n} document${n > 1 ? "s" : ""} de ${org} ${n > 1 ? "seront supprimés" : "sera supprimé"} à partir du ${when}.`,
+          "Exportez-les dès maintenant depuis votre tableau de bord pour vos archives (vos obligations comptables restent les vôtres).",
+        ],
+        { label: "Exporter mes documents", url: `${app}/dashboard` },
         org,
       );
     }

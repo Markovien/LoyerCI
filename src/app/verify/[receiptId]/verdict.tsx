@@ -1,10 +1,10 @@
-import { Ban, CircleCheckBig, CircleX } from "lucide-react";
+import { Archive, Ban, CircleCheckBig, CircleX } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatLongDate, formatPeriod, formatXOF } from "@/lib/format";
 
 /** Résultat de vérification d'un document (quittance ou avis d'échéance), données déjà masquées en base. */
 export interface DocumentVerdict {
-  verdict: "authentique" | "annulee" | "invalide" | "alteree";
+  verdict: "authentique" | "annulee" | "invalide" | "alteree" | "plus_conserve";
   docType: "quittance" | "avis" | null;
   number: string | null;
   landlordName: string | null;
@@ -12,7 +12,7 @@ export interface DocumentVerdict {
   location: string | null;
   period: string | null;
   amount: number | null;
-  /** Quittance : date de paiement. Avis : date d'échéance. */
+  /** Quittance : date de paiement. Avis : date d'échéance. Document plus conservé : date d'émission. */
   date: string | null;
   fingerprint: string | null;
   revokedAt: string | null;
@@ -38,6 +38,27 @@ export const INVALID: DocumentVerdict = {
  */
 export function Verdict({ r }: { r: DocumentVerdict }) {
   const label = r.docType === "avis" ? "Avis d'échéance" : "Quittance";
+  if (r.verdict === "plus_conserve") {
+    // Ni « authentique » ni « faux » : LoyerCI ne conserve les documents que 2 ans (P3.4).
+    return (
+      <Card className="border-muted-foreground/30">
+        <CardContent className="grid gap-4 p-5">
+          <div data-verdict="plus_conserve" className="grid justify-items-center gap-2 rounded-xl bg-muted p-6 text-foreground">
+            <Archive className="size-24" strokeWidth={2.5} aria-hidden />
+            <p className="text-center text-2xl font-bold">Document plus conservé</p>
+            <p className="text-center text-sm text-muted-foreground">
+              {label} n° {r.number}
+              {r.date ? `, émis${r.docType === "avis" ? "" : "e"} le ${formatLongDate(r.date)}` : ""}.
+            </p>
+          </div>
+          <p className="text-sm">
+            LoyerCI ne conserve les documents que 2 ans après leur émission. Ce document a bien existé, mais son contenu ne peut plus être
+            vérifié en ligne. Pour une preuve récente, demandez une attestation au bailleur.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
   if (r.verdict === "authentique" || r.verdict === "annulee") {
     const ok = r.verdict === "authentique";
     return (

@@ -667,6 +667,7 @@ export type Database = {
           payer_msisdn: string | null;
           payer_msisdn_hint: string | null;
           proof_path: string | null;
+          proof_purged_at: string | null;
           provider: Database["public"]["Enums"]["payment_provider"];
           provider_transaction_id: string;
           status: Database["public"]["Enums"]["payment_status"];
@@ -692,6 +693,7 @@ export type Database = {
           payer_msisdn?: string | null;
           payer_msisdn_hint?: never;
           proof_path?: string | null;
+          proof_purged_at?: string | null;
           provider: Database["public"]["Enums"]["payment_provider"];
           provider_transaction_id: string;
           status?: Database["public"]["Enums"]["payment_status"];
@@ -716,6 +718,7 @@ export type Database = {
           payer_msisdn?: string | null;
           payer_msisdn_hint?: never;
           proof_path?: string | null;
+          proof_purged_at?: string | null;
           provider?: Database["public"]["Enums"]["payment_provider"];
           provider_transaction_id?: string;
           status?: Database["public"]["Enums"]["payment_status"];
@@ -1200,8 +1203,17 @@ export type Database = {
           recipients: Json;
         }[];
       };
+      claim_storage_deletions: {
+        Args: { p_limit?: number };
+        Returns: {
+          bucket: string;
+          id: number;
+          path: string;
+        }[];
+      };
       close_ended_leases: { Args: Record<PropertyKey, never>; Returns: number };
       complete_notification: { Args: { p_error?: string; p_id: number }; Returns: undefined };
+      complete_storage_deletion: { Args: { p_error?: string; p_id: number }; Returns: undefined };
       confirm_provider_payment: {
         Args: {
           p_amount: number;
@@ -1301,6 +1313,7 @@ export type Database = {
           transfers_pending: number;
         }[];
       };
+      enqueue_purge_alerts: { Args: Record<PropertyKey, never>; Returns: number };
       enqueue_reminder_emails: { Args: { p_today?: string }; Returns: number };
       enqueue_stale_declarations: { Args: Record<PropertyKey, never>; Returns: number };
       fail_provider_payment: {
@@ -1370,6 +1383,10 @@ export type Database = {
         };
         Returns: undefined;
       };
+      log_documents_export: {
+        Args: { p_actor: string; p_count: number; p_ip: unknown; p_org: string; p_ua: string };
+        Returns: undefined;
+      };
       log_proof_access: {
         Args: { p_actor: string; p_ip: unknown; p_payment: string; p_ua: string };
         Returns: string;
@@ -1417,6 +1434,14 @@ export type Database = {
           departs: number;
           rappels: number;
           suppressions: number;
+        }[];
+      };
+      purge_expired_documents: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          avis: number;
+          preuves: number;
+          quittances: number;
         }[];
       };
       record_advance: {

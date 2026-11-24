@@ -33,6 +33,8 @@ Une tâche n'est **terminée** que si ces quatre commandes passent. Chaque nouve
 12. **Fichiers téléversés** : type déterminé par les octets magiques (`src/lib/security/files.ts`), nom généré par le serveur, bucket privé, lecture par URL signée de 60 s après journalisation.
 13. **Rien n'est exposé implicitement** : depuis la migration `…0500_security_hardening`, les nouvelles tables et fonctions ne sont accessibles à `anon`/`authenticated` que par `GRANT` explicite. Toute fonction exécutable par `authenticated` doit être ajoutée **consciemment** à la liste blanche du garde-fou de `01_security_scenarios.sql` ; `anon` n'exécute **aucune** fonction (même `verify_receipt` passe par le serveur).
 14. **Signatures versionnées** : quittances (`signature_version`) et audit (`hash_version`). Toute évolution du contenu signé crée une nouvelle version ; les anciennes restent vérifiables. La signature couvre **tous** les champs affichés ou imprimés.
+15. **Conservation (décision du 24/11/2026)** : avis, quittances et preuves de virement sont conservés **2 ans après leur émission**, puis supprimés **uniquement** par `public.purge_expired_documents` (pierre tombale pour `/verify`). Aucune autre voie de suppression ; le journal d'audit n'est jamais purgé. Aucune pénalité de retard n'est calculée ni annoncée.
+16. **Notifications e-mail automatiques** : uniquement par la file `private.outbox` (destinataires résolus en base, plafond D.5) et la route `/api/cron/notifications` ; jamais de coordonnée de paiement ni de texte libre saisi par un utilisateur dans un message.
 
 ## Conventions
 

@@ -96,7 +96,7 @@ pendant la carence de 48 h. Un test vérifie qu'aucune page locataire ne contien
 
 ## Mise en production — liste de contrôle
 
-- [ ] Supabase en région UE (décision D3) et dossier ARTCI déposé ; durée légale de conservation des documents arrêtée
+- [ ] Supabase en région UE (décision D3) et dossier ARTCI déposé ; conservation des documents (2 ans après émission) annoncée dans les CGU et la politique de confidentialité
 - [ ] Secret Vault `receipt_signing_key` aléatoire (64 hex) : `select vault.create_secret(encode(gen_random_bytes(32),'hex'),'receipt_signing_key');`
 - [ ] `SUPABASE_SERVICE_ROLE_KEY` (et, si CinetPay est utilisé, ses trois clés) uniquement côté serveur, jamais en `NEXT_PUBLIC_`
 - [ ] `CLIENT_IP_HEADER` / `TRUSTED_PROXY_HOPS` adaptés à l'hébergeur (Vercel : `x-real-ip`)
