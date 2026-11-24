@@ -123,7 +123,7 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 - Nécessite un fournisseur SMS (question ouverte).
 ### D.4 Compte locataire facultatif (historique complet)
 - Création réservée aux numéros déjà connus d'un bailleur (pas d'inscription ouverte, décision D1), connexion par code SMS.
-- **Sortie du parc** (plus aucun bail actif chez aucun bailleur) : le locataire est invité à télécharger ses documents, rappel avant échéance, puis **suppression du compte et de son accès à M+3**. Les documents restent dans les archives du bailleur pendant la **durée légale de conservation** (pièces comptables, OHADA : à confirmer par un juriste) et `/verify` continue de répondre (données masquées).
+- **Sortie du parc** (plus aucun bail actif chez aucun bailleur) : le locataire est invité à télécharger ses documents, rappel avant échéance, puis **suppression du compte et de son accès à M+3**. Les documents restent dans les archives du bailleur **2 ans au plus après leur émission** (décision du 24/11/2026, P3.4) et `/verify` continue de répondre (données masquées).
 ### D.5 Comptage des envois et facturation
 - Tous les envois (SMS, codes, e-mails, WhatsApp) sont **à la charge du bailleur** et inclus dans son abonnement : compteur par organisation, plafonds anti-abus, export pour la facturation.
 
@@ -154,13 +154,19 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 
 ## Phase 3 — Authentification et notifications
 
-### P3.1 OTP SMS (périmètre réduit par la phase D)
+### P3.1 OTP SMS (périmètre réduit par la phase D) — en suspens (24/11/2026)
+- Benchmark des fournisseurs fait : `docs/BENCHMARK-SMS.md` (recommandation : Orange SMS API CI et un agrégateur local, test réel sur les trois réseaux avant choix ; branchement par le crochet d'envoi de SMS de Supabase Auth).
 - Utilisé pour le compte locataire facultatif (D.4) et le téléchargement par code (D.3). Supabase Phone Auth avec un fournisseur SMS couvrant la Côte d'Ivoire (choix à faire valider : coût et délivrabilité). Connexion par numéro pour les locataires (cas majoritaire), lien magique conservé pour l'e-mail.
 ### P3.2 Notifications transactionnelles
 - File `notifications` (table + Edge Function ou tâche planifiée) : avis disponible, paiement déclaré (vers le bailleur), paiement confirmé ou rejeté (vers le locataire), quittance disponible, changement de compte de réception (alerte), déclaration en attente depuis plus de 48 h.
 - Canaux : e-mail (Resend ou SMTP), SMS. WhatsApp Business API en option (coût par conversation à évaluer). Les liens `wa.me` existants restent l'option gratuite et manuelle.
 ### P3.3 Relances automatiques
 - J-3, J+3, J+10 (configurables par organisation), via `pg_cron` et la file de notifications. Contenu sans aucune coordonnée de paiement (invariant n°9).
+### P3.4 Conservation des documents : 2 ans après émission (décision du 24/11/2026)
+- Purge quotidienne des avis, quittances et preuves de virement émis il y a plus de 2 ans (fichiers du stockage compris) ; jamais du journal d'audit.
+- Alerte au bailleur 30 jours avant (tableau de bord et e-mail) et export complet de ses documents (archive) avant la purge.
+- `/verify` d'un document purgé : « document plus conservé par LoyerCI » (ni « faux », ni « authentique »).
+- Historique du locataire : il est invité à télécharger ses documents ; rien n'est conservé au-delà.
 
 ---
 
@@ -168,7 +174,7 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 
 1. **P4.1 Limiteur de débit distribué** : remplacer le stockage de `src/lib/security/rate-limit.ts` par Redis (ex. Upstash), sans changer l'interface `limit()`.
 2. **P4.2 Réconciliation de secours** (si CinetPay est activé) : tâche horaire qui interroge `/v2/payment/check` pour les intentions `initie` de plus de 30 minutes.
-3. **P4.3 Rétention** : purge des `webhook_events` après 90 jours ; preuves de paiement après N années (durée à valider avec le porteur de projet pour la conformité ARTCI et comptable).
+3. **P4.3 Rétention** : purge des `webhook_events` après 90 jours  (les documents et preuves de paiement : 2 ans après émission, traité en P3.4).
 4. **P4.4 Audit hors base** : export quotidien signé de `audit_logs` vers un stockage WORM externe ; alerte si `verify_audit_chain()` renvoie une ligne.
 5. **P4.5 Observabilité** : Sentry (en filtrant toute donnée personnelle), journaux structurés, `report-to` pour la CSP.
 6. **P4.6 Sauvegardes et reprise** : PITR Supabase, procédure de restauration testée.
@@ -210,15 +216,21 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 - **Locataire** : « J'ai payé » conservé, n° de transaction facultatif. L'assistant de collage de SMS est reporté (phase 5).
 - **Documents** : envoi par e-mail ET WhatsApp (comptes gratuits, envoi manuel depuis le back-office au départ), SMS de disponibilité avec lien de téléchargement protégé par code à usage unique, compte locataire facultatif pour l'historique. Le lien « carnet sans compte » est abandonné.
 - **Avis** : jamais de coordonnée de paiement ; avis signés et vérifiables sur `/verify`.
-- **Sortie du parc** : suppression du compte locataire à M+3 ; documents conservés par le bailleur pendant la durée légale.
+- **Sortie du parc** : suppression du compte locataire à M+3 ; documents conservés par le bailleur 2 ans au plus après émission (révisé le 24/11/2026).
 - **Frais d'envoi** à la charge du bailleur, inclus dans son abonnement.
 - **Envoi des documents (22/11)** : par chaque bailleur depuis ses propres comptes, en un geste depuis le tableau de bord (voir D.2).
+
+## Décisions arbitrées (24/11/2026)
+
+- **Conservation des documents : 2 ans au plus après leur émission** (avis, quittances, preuves de virement). Le bailleur est alerté et invité à exporter ses documents **30 jours avant** la purge ; il reste seul responsable de ses propres obligations comptables. Le journal d'audit (qui ne contient pas les documents) est conservé ; après purge, `/verify` répond « document plus conservé » (P3.4). Remplace la « durée légale » mentionnée en D.4.
+- **Aucune pénalité de retard** : l'application n'en calcule ni n'en affiche.
+- **SMS (D.3, P3.1) en suspens** jusqu'au choix du fournisseur : connexion par **lien magique envoyé par e-mail uniquement** (aucun lien de connexion par WhatsApp : il passerait par le compte du bailleur). Benchmark : `docs/BENCHMARK-SMS.md`.
+- **Notifications automatiques (P3.2)** envoyées par LoyerCI depuis une **adresse e-mail unique** (fournisseur SMTP choisi plus tard ; Mailpit en local), coût inclus dans l'abonnement. Les documents restent envoyés par le bailleur depuis ses propres comptes (D.2).
+- **Relances (P3.3)** : liste du jour dans le tableau de bord avec envoi WhatsApp en un geste depuis le compte du bailleur, plus un rappel automatique par e-mail aux locataires qui en ont un, si l'organisation l'active. Échéances par défaut J-3, J+3, J+10, réglables.
 
 ## Questions ouvertes (à trancher par le porteur de projet)
 
 1. Périmètre exact de l'interdiction du QR PI-SPI à distance : une affiche dans le hall d'un immeuble compte-t-elle comme « présence physique » ? (à confirmer auprès de la BCEAO ou d'un participant)
 2. Formats réels des n° de transaction et des SMS par opérateur (utiles au rapprochement automatique de la phase 5, plus à P1.5).
-3. Fournisseur SMS (D.3, P3.1) : coût et délivrabilité en Côte d'Ivoire.
-7. Durée légale de conservation des quittances et paiements (OHADA, 10 ans ?) à faire confirmer par un juriste.
-4. Pénalités de retard (attention au cadre légal) et durées de conservation (le prorata est tranché : mois d'entrée entier).
+3. Fournisseur SMS (D.3, P3.1) : benchmark fait (`docs/BENCHMARK-SMS.md`) ; reste le test réel de délivrabilité et le choix.
 5. Modèle économique de LoyerCI (abonnement bailleur ?), qui ne doit **jamais** reposer sur la détention des loyers.
