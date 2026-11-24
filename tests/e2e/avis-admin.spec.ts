@@ -6,15 +6,25 @@ test.use({ storageState: ownerState });
 
 test("génération manuelle des avis du mois puis annulation motivée d'un avis non réglé", async ({ page }, info) => {
   test.skip(info.project.name !== "mobile", "une seule fois");
-  const d = new Date();
-  d.setUTCDate(1);
-  d.setUTCMonth(d.getUTCMonth() + 30); // mois lointain : aucun avis encore
-  const month = d.toISOString().slice(0, 7);
+  // Mois lointain sans aucun avis (rejouable : on avance tant que le mois existe déjà).
+  const { data: tenant } = await admin().from("tenants").select("id, org_id").eq("full_name", "Koné Ibrahim").single();
+  let month = "";
+  for (let k = 30; k < 400; k++) {
+    const d = new Date();
+    d.setUTCDate(1);
+    d.setUTCMonth(d.getUTCMonth() + k);
+    month = d.toISOString().slice(0, 7);
+    const { count } = await admin()
+      .from("invoices")
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", tenant!.org_id)
+      .eq("period", `${month}-01`);
+    if (!count) break;
+  }
   await page.goto(`/dashboard?mois=${month}`);
   await page.getByRole("button", { name: "Générer les avis du mois" }).click();
   await expect(page.getByRole("status").filter({ hasText: /avis générés/ })).toBeVisible();
 
-  const { data: tenant } = await admin().from("tenants").select("id").eq("full_name", "Koné Ibrahim").single();
   const { data: inv } = await admin().from("invoices").select("id").eq("tenant_id", tenant!.id).eq("period", `${month}-01`).single();
   await page.reload();
   // Ligne repérée par l'avis lui-même (le bouton d'annulation disparaît une fois ouvert).
@@ -22,9 +32,10 @@ test("génération manuelle des avis du mois puis annulation motivée d'un avis 
   await row.getByRole("button", { name: "Annuler l'avis" }).click();
   await row.getByLabel("Motif").fill("Bien en travaux ce mois-ci");
   await row.getByRole("button", { name: "Confirmer l'annulation" }).click();
-  // L'avis annulé est retrié en fin de liste au rafraîchissement : on vérifie son badge
-  // (le message transitoire peut disparaître avec le rafraîchissement temps réel).
+  await expect(row.getByRole("status")).toContainText("Avis annulé");
+  // Le message reste visible après le rafraîchissement (le composant n'est plus démonté).
   await expect(row.getByText("Annulé", { exact: true })).toBeVisible();
+  await expect(row.getByRole("status")).toContainText("Avis annulé");
   const { data } = await admin().from("invoices").select("status, cancelled_reason").eq("id", inv!.id).single();
   expect(data).toEqual({ status: "annule", cancelled_reason: "Bien en travaux ce mois-ci" });
 });

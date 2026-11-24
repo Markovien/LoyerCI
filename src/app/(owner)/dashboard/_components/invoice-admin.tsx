@@ -51,7 +51,9 @@ export function InvoiceAdmin({
   const [reason, setReason] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
-  if (!canCancelInvoice && !(canCancelReceipt && receiptId)) return null;
+  // Plus rien à annuler : on garde néanmoins le message de résultat, sans quoi la
+  // confirmation disparaît dès le rafraîchissement qui suit l'annulation.
+  if (!canCancelInvoice && !(canCancelReceipt && receiptId) && !msg) return null;
 
   const confirm = () =>
     start(async () => {
