@@ -2160,4 +2160,37 @@ do $$ begin
   assert not has_table_privilege('authenticated', 'private.rate_limits', 'select'), 'compteurs lisibles';
 end $$;
 
+-- =============================================================================
+-- P4.2 — Réconciliation de secours : intentions « initiées » depuis plus de 30 minutes
+-- =============================================================================
+set role service_role;
+select public.generate_monthly_invoices('2027-03-01') \g /dev/null
+do $$
+declare
+  v_inv uuid;
+begin
+  select i.id into v_inv from public.invoices i
+   where i.lease_id = 'f0000000-0000-4000-8000-000000000001' and i.period = '2027-03-01';
+  perform public.create_payment_intent('a0000000-0000-4000-8000-000000000003', v_inv, 'cinetpay', 'orange', 'TX-RECON-VIEUX-01', null, null);
+end $$;
+reset role;
+update public.payments set created_at = now() - interval '45 minutes' where provider_transaction_id = 'TX-RECON-VIEUX-01';
+set role service_role;
+do $$ begin
+  assert exists (select 1 from public.stale_provider_intents('cinetpay') s where s.provider_transaction_id = 'TX-RECON-VIEUX-01'),
+    'intention de plus de 30 min non listée';
+  assert not exists (select 1 from public.stale_provider_intents('cinetpay') s
+                      join public.payments p on p.provider_transaction_id = s.provider_transaction_id
+                     where p.status <> 'initie' or p.created_at > now() - interval '30 minutes'),
+    'intention récente ou déjà traitée listée';
+  assert public.fail_provider_payment('cinetpay', 'TX-RECON-VIEUX-01', 'expire_sans_reponse', null) = 'echoue', 'clôture';
+  assert not exists (select 1 from public.stale_provider_intents('cinetpay') s where s.provider_transaction_id = 'TX-RECON-VIEUX-01'),
+    'intention close encore listée';
+  raise notice 'OK  P4.2 réconciliation : seules les intentions initiées depuis plus de 30 min sont reprises';
+end $$;
+reset role;
+do $$ begin
+  assert not has_function_privilege('authenticated', 'public.stale_provider_intents(public.payment_provider, integer)', 'execute'), 'liste exposée';
+end $$;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

@@ -1558,6 +1558,13 @@ export type Database = {
         };
         Returns: undefined;
       };
+      stale_provider_intents: {
+        Args: { p_limit?: number; p_provider: Database["public"]["Enums"]["payment_provider"] };
+        Returns: {
+          created_at: string;
+          provider_transaction_id: string;
+        }[];
+      };
       submit_direct_payment: {
         Args: {
           p_actor: string;

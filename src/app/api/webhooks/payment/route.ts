@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getProvider } from "@/lib/payments/registry";
+import { settleVerified } from "@/lib/payments/settle";
 import { ProviderError, type ProviderName } from "@/lib/payments/types";
 import { sha256Hex } from "@/lib/security/crypto";
 import { clientIpFrom } from "@/lib/security/request-context";
@@ -79,30 +80,7 @@ export async function POST(request: NextRequest) {
   let outcome: string;
   try {
     const tx = await provider.verifyTransaction(transactionId);
-    if (tx.status === "accepted") {
-      const { data, error } = await admin.rpc("confirm_provider_payment", {
-        p_provider: providerName,
-        p_tx_id: transactionId,
-        p_amount: tx.amount,
-        p_currency: tx.currency,
-        p_operator: tx.operator,
-        p_ip: ip,
-        p_meta: { verification: tx.raw },
-      });
-      if (error) throw error;
-      outcome = String(data);
-    } else if (tx.status === "refused") {
-      const { data, error } = await admin.rpc("fail_provider_payment", {
-        p_provider: providerName,
-        p_tx_id: transactionId,
-        p_reason: "refuse_par_operateur",
-        p_ip: ip,
-      });
-      if (error) throw error;
-      outcome = String(data);
-    } else {
-      outcome = "en_attente";
-    }
+    outcome = await settleVerified(admin, provider, tx, ip);
   } catch (e) {
     // Erreur métier/données côté base (classes SQLSTATE 22, 23, 42, P0) : la réémission
     // échouerait à l'identique. On la trace au lieu de répondre 503 en boucle.
