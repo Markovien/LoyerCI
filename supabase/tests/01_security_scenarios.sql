@@ -2241,4 +2241,53 @@ do $$ begin
   assert not has_function_privilege('authenticated', 'public.system_health()', 'execute'), 'état de santé exposé';
 end $$;
 
+-- =============================================================================
+-- P4.7 — Revue de sécurité : liste de contrôle automatisée (complète le garde-fou
+-- générique ; s'applique d'office à toute future table, vue ou séquence).
+-- =============================================================================
+do $$
+declare v text;
+begin
+  -- Aucune politique d'écriture : la RLS ne sert qu'à filtrer les lectures.
+  select string_agg(tablename || ':' || policyname || ':' || cmd, ', ') into v
+    from pg_policies where schemaname = 'public' and cmd <> 'SELECT';
+  assert v is null, 'politiques d''écriture : ' || v;
+  -- Politiques réservées au rôle authenticated (jamais anon ni public).
+  select string_agg(tablename || ':' || policyname, ', ') into v
+    from pg_policies where schemaname = 'public' and not (roles = array['authenticated']::name[]);
+  assert v is null, 'politiques ouvertes à anon/public : ' || v;
+  -- Vues : aucune exposée sans security_invoker (sinon elles contourneraient la RLS).
+  select string_agg(c.relname, ', ') into v
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind in ('v', 'm')
+     and (has_table_privilege('authenticated', c.oid, 'select') or has_table_privilege('anon', c.oid, 'select'))
+     and not coalesce(c.reloptions @> array['security_invoker=true'], false);
+  assert v is null, 'vues exposées sans security_invoker : ' || v;
+  -- Séquences : aucun accès client.
+  select string_agg(n.nspname || '.' || c.relname, ', ') into v
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname in ('public', 'private') and c.relkind = 'S'
+     and (has_sequence_privilege('authenticated', c.oid, 'usage,update') or has_sequence_privilege('anon', c.oid, 'usage,update'));
+  assert v is null, 'séquences accessibles au client : ' || v;
+  -- Schéma private : aucune table lisible ni modifiable par le client.
+  select string_agg(c.relname, ', ') into v
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'private' and c.relkind in ('r', 'p', 'v')
+     and (has_table_privilege('authenticated', c.oid, 'select,insert,update,delete')
+          or has_table_privilege('anon', c.oid, 'select,insert,update,delete'));
+  assert v is null, 'tables privées accessibles au client : ' || v;
+  -- Journal d'audit : même service_role ne peut ni modifier ni supprimer.
+  assert not has_table_privilege('service_role', 'public.audit_logs', 'update')
+     and not has_table_privilege('service_role', 'public.audit_logs', 'delete')
+     and not has_table_privilege('service_role', 'public.audit_logs', 'truncate'), 'audit modifiable par service_role';
+  -- Aucune fonction SECURITY DEFINER du schéma public exécutable par PUBLIC (rôle implicite).
+  select string_agg(p.oid::regprocedure::text, ', ') into v
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.prosecdef
+     and exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                  where a.grantee = 0 and a.privilege_type = 'EXECUTE');
+  assert v is null, 'fonctions SECURITY DEFINER exécutables par PUBLIC : ' || v;
+  raise notice 'OK  P4.7 liste de contrôle : aucune politique d''écriture ni ouverte à anon, vues, séquences et tables privées fermées, audit inaltérable';
+end $$;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='
