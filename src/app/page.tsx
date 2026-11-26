@@ -19,7 +19,11 @@ const FEATURES = [
     title: "Quittances infalsifiables",
     text: "Signature cryptographique et QR code vérifiable par n'importe quel tiers.",
   },
-  { icon: ShieldCheck, title: "Sécurité de niveau bancaire", text: "Cloisonnement en base, journal d'audit chaîné, webhooks signés." },
+  {
+    icon: ShieldCheck,
+    title: "Sécurité renforcée",
+    text: "Cloisonnement en base, journal d'audit chaîné, documents signés. LoyerCI ne détient jamais vos loyers.",
+  },
 ];
 
 export default function Home() {

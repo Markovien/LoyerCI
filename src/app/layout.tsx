@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/sw-register";
+import { LegalFooter } from "@/components/legal-page";
 
 export const metadata: Metadata = {
   title: { default: "LoyerCI — Gestion locative en Côte d'Ivoire", template: "%s · LoyerCI" },
@@ -25,6 +26,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="fr">
       <body className="min-h-dvh antialiased">
         {children}
+        <LegalFooter />
         <ServiceWorkerRegister />
       </body>
     </html>
