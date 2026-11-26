@@ -3,6 +3,7 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import { loginSchema } from "@/lib/validation/schemas";
 import { limit } from "@/lib/security/rate-limit";
 import { requestContext } from "@/lib/security/request-context";
+import { log } from "@/lib/log";
 
 export type LoginState = { ok: boolean; message: string } | null;
 
@@ -24,7 +25,7 @@ export async function sendMagicLink(_: LoginState, formData: FormData): Promise<
   });
   // Trace serveur sans donnée personnelle (pas d'e-mail) : une panne d'Auth ne doit pas passer inaperçue.
   if (error && error.code !== "otp_disabled" && error.code !== "user_not_found") {
-    console.warn(`[login] échec d'envoi du lien · code=${error.code ?? "inconnu"} · statut=${error.status ?? "?"}`);
+    log.warn("connexion_envoi_lien_echoue", { code: error.code ?? "inconnu", statut: error.status ?? null });
   }
   // Réponse identique que le compte existe ou non (pas d'énumération des comptes).
   return { ok: true, message: "Si un compte existe pour cette adresse, un lien de connexion vient d'être envoyé." };

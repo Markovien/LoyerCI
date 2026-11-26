@@ -11,6 +11,7 @@ import { getProvider, isAllowedCheckoutUrl, isProviderConfigured } from "@/lib/p
 import { ProviderError } from "@/lib/payments/types";
 import { directPaymentSchema, initiateMobileMoneySchema, transferProofSchema } from "@/lib/validation/schemas";
 import { serverEnv } from "@/lib/env";
+import { errorText, log } from "@/lib/log";
 
 export type PayResult = { ok: boolean; message: string; redirectUrl?: string };
 
@@ -85,7 +86,7 @@ export async function initiateMobileMoneyPayment(input: unknown): Promise<PayRes
       p_reason: e instanceof Error ? e.message.slice(0, 200) : "init_echec",
       p_ip: ctx.ip,
     });
-    console.warn(`[paiement] initialisation échouée · tx=${intent.transaction_id} · ${e instanceof Error ? e.message : "inconnu"}`);
+    log.warn("paiement_initialisation_echouee", { tx: intent.transaction_id, erreur: errorText(e) });
     return { ok: false, message: "Service de paiement momentanément indisponible. Réessayez ou payez par virement." };
   }
 }
@@ -194,7 +195,7 @@ export async function submitDirectPayment(_: ProofState, formData: FormData): Pr
     if (path) await admin.storage.from("transfer-proofs").remove([path]); // pas de fichier orphelin
     if (error.message.includes("déjà été déclaré")) {
       // Tentative de réutilisation d'une transaction : tracée côté serveur (sans donnée personnelle).
-      console.warn(`[paiement-direct] référence opérateur réutilisée · avis=${invoice.id} · opérateur=${parsed.data.operator}`);
+      log.warn("reference_operateur_reutilisee", { avis: invoice.id, operateur: parsed.data.operator });
     }
     return { ok: false, message: dbErrorMessage(error) };
   }

@@ -9,6 +9,7 @@ import { requestContext } from "@/lib/security/request-context";
 import { limit } from "@/lib/security/rate-limit";
 import { serverEnv } from "@/lib/env";
 import { invitationTokenSchema } from "@/lib/validation/schemas";
+import { log } from "@/lib/log";
 
 export type InvitationState = { ok: boolean; message: string } | null;
 
@@ -42,7 +43,7 @@ export async function requestInvitationLogin(_: InvitationState, formData: FormD
   // pour un porteur d'invitation valide. Il ne donne accès à rien tant qu'il n'est pas rattaché.
   const { error: cErr } = await admin.auth.admin.createUser({ email: email.data, email_confirm: true });
   if (cErr && cErr.code !== "email_exists") {
-    console.warn(`[invitation] création de compte impossible · code=${cErr.code ?? "inconnu"}`);
+    log.warn("invitation_creation_compte_impossible", { code: cErr.code ?? "inconnu" });
     return { ok: false, message: "Création du compte impossible. Réessayez dans un instant." };
   }
   const supabase = await createSupabaseServer();

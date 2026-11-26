@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { cronAuthorized } from "@/lib/security/cron";
+import { log } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,5 +28,6 @@ export async function GET(req: NextRequest) {
       else removed++;
     }
   }
+  if (removed + failed > 0) (failed ? log.warn : log.info)("fichiers_retires", { retires: removed, echecs: failed });
   return NextResponse.json({ removed, failed });
 }

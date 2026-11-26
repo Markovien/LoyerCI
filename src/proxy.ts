@@ -32,6 +32,9 @@ export async function proxy(request: NextRequest) {
     "manifest-src 'self'",
     "worker-src 'self'",
     isDev ? "" : "upgrade-insecure-requests",
+    // P4.5 : violations remontées (rien n'est stocké ; journal filtré).
+    "report-uri /api/csp-report",
+    "report-to csp",
   ]
     .filter(Boolean)
     .join("; ");
@@ -52,6 +55,7 @@ export async function proxy(request: NextRequest) {
 
   const res = response();
   res.headers.set("Content-Security-Policy", csp);
+  res.headers.set("Reporting-Endpoints", 'csp="/api/csp-report"');
   return res;
 }
 

@@ -7,6 +7,7 @@ import { sha256Hex } from "@/lib/security/crypto";
 import { clientIpFrom } from "@/lib/security/request-context";
 import { limit } from "@/lib/security/rate-limit";
 import { serverEnv } from "@/lib/env";
+import { log, maskIp } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
 
   if (!provider.verifySignature(rawBody, request.headers)) {
     // Pas d'écriture en base pour une requête non signée (évite le remplissage malveillant).
-    console.warn(`[webhook] signature invalide · fournisseur=${providerName} · ip=${ip ?? "inconnue"}`);
+    log.warn("webhook_signature_invalide", { fournisseur: providerName, reseau: maskIp(ip) });
     return new NextResponse("invalid signature", { status: 401 });
   }
 
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
     // Erreur métier/données côté base (classes SQLSTATE 22, 23, 42, P0) : la réémission
     // échouerait à l'identique. On la trace au lieu de répondre 503 en boucle.
     const retriable = e instanceof ProviderError ? e.retriable : !isPermanentDbError(e);
-    if (!retriable) console.error(`[webhook] rejet définitif · tx=${transactionId} · ${errorText(e)}`);
+    if (!retriable) log.error("webhook_rejet_definitif", { tx: transactionId, erreur: errorText(e) });
     if (retriable) {
       // On libère la clé pour que la réémission du fournisseur soit retraitée.
       await admin.from("webhook_events").delete().eq("provider", providerName).eq("event_key", eventKey).is("processed_at", null);

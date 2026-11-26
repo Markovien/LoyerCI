@@ -2223,4 +2223,22 @@ do $$ begin
   raise notice 'OK  P4.3 purge technique : webhooks > 90 j, messages traités > 90 j, ré-authentifications > 30 j ; audit intact';
 end $$;
 
+-- =============================================================================
+-- P4.5 — État de santé (chaîne d'audit, files) pour les journaux structurés
+-- =============================================================================
+set role service_role;
+do $$
+declare r record;
+begin
+  select * into r from public.system_health();
+  -- La chaîne a été volontairement altérée plus haut (scénario superutilisateur) : signalée.
+  assert not r.audit_ok and r.audit_broken_at is not null, 'rupture de la chaîne non signalée';
+  assert r.audit_rows > 0 and r.outbox_pending >= 0 and r.storage_pending >= 0, 'compteurs absents';
+  raise notice 'OK  P4.5 santé : rupture de la chaîne d''audit signalée, compteurs des files';
+end $$;
+reset role;
+do $$ begin
+  assert not has_function_privilege('authenticated', 'public.system_health()', 'execute'), 'état de santé exposé';
+end $$;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

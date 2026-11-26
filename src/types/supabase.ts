@@ -1601,6 +1601,19 @@ export type Database = {
         };
         Returns: string;
       };
+      system_health: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          audit_broken_at: number;
+          audit_ok: boolean;
+          audit_rows: number;
+          outbox_failed_24h: number;
+          outbox_oldest_minutes: number;
+          outbox_pending: number;
+          payments_waiting_48h: number;
+          storage_pending: number;
+        }[];
+      };
       terminate_lease: {
         Args: {
           p_actor: string;

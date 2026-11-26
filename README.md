@@ -102,7 +102,8 @@ pendant la carence de 48 h. Un test vérifie qu'aucune page locataire ne contien
 - [ ] `CLIENT_IP_HEADER` / `TRUSTED_PROXY_HOPS` adaptés à l'hébergeur (Vercel : `x-real-ip`)
 - [ ] Inscription publique fermée sur le projet hébergé comme en local : `[auth] enable_signup = false`, **pas** celui de `[auth.email]`, qui couperait la connexion (M6) ; invitation seule (D1)
 - [ ] Notifications : `SMTP_URL` et `MAIL_FROM` (adresse LoyerCI avec SPF, DKIM et DMARC), `CRON_SECRET` aléatoire ; ordonnanceur toutes les 5 min sur `/api/cron/notifications` (`vercel.json` : offre Vercel permettant cette fréquence, sinon ordonnanceur externe)
-- [ ] Export externe régulier de la tête de chaîne d'audit (`private.audit_chain_head()`)
+- [ ] Export externe régulier de la tête de chaîne d'audit (`private.audit_chain_head()`) — reporté (P4.4)
+- [ ] Alerte de l'hébergeur sur les événements de journal `sante_anomalie` et `rate_limit_fallback` (contrôle de santé quotidien `/api/cron/health`)
 - [ ] Contrôle manuel d'une affiche PI-SPI imprimée avec l'application d'un établissement participant
 - [ ] Tests d'intrusion
 - [ ] Types à jour : `npm run gen:types`

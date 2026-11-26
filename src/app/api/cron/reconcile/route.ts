@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { cronAuthorized } from "@/lib/security/cron";
 import { getProvider, isProviderConfigured } from "@/lib/payments/registry";
 import { reconcileIntents } from "@/lib/payments/settle";
+import { log } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,6 @@ export async function GET(req: NextRequest) {
   const { data, error } = await admin.rpc("stale_provider_intents", { p_provider: "cinetpay", p_limit: 50 });
   if (error) return NextResponse.json({ error: "lecture impossible" }, { status: 500 });
   const counts = await reconcileIntents(admin, getProvider("cinetpay"), data ?? []);
-  console.info(JSON.stringify({ level: "info", event: "reconciliation", provider: "cinetpay", ...counts }));
+  log.info("reconciliation", { fournisseur: "cinetpay", ...counts });
   return NextResponse.json(counts);
 }

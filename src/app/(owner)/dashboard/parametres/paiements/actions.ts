@@ -5,6 +5,7 @@ import { dbErrorMessage, supabaseAdmin } from "@/lib/supabase/admin";
 import { requestContext } from "@/lib/security/request-context";
 import { limit } from "@/lib/security/rate-limit";
 import { paymentSettingsSchema, reauthCodeSchema, receivingAccountSchema, uuid } from "@/lib/validation/schemas";
+import { log } from "@/lib/log";
 
 export type SettingsResult = { ok: boolean; message: string };
 
@@ -22,7 +23,7 @@ export async function requestReauthCode(): Promise<SettingsResult> {
   }
   const { error } = await supabase.auth.signInWithOtp({ email: user.email, options: { shouldCreateUser: false } });
   if (error) {
-    console.warn(`[reauth] envoi du code impossible · code=${error.code ?? "inconnu"}`);
+    log.warn("reauthentification_envoi_code_impossible", { code: error.code ?? "inconnu" });
     return {
       ok: false,
       message:

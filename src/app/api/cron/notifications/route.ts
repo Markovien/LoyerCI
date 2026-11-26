@@ -3,6 +3,7 @@ import { z } from "zod";
 import { serverEnv } from "@/lib/env";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { cronAuthorized } from "@/lib/security/cron";
+import { log } from "@/lib/log";
 import { mailerConfigured, sendEmail } from "@/lib/notifications/mailer";
 import { renderNotification, type NotificationKind } from "@/lib/notifications/templates";
 
@@ -65,5 +66,6 @@ export async function GET(req: NextRequest) {
       else sent++;
     }
   }
+  if (sent + failed > 0) (failed ? log.warn : log.info)("notifications_expediees", { envoyes: sent, echecs: failed });
   return NextResponse.json({ sent, failed });
 }

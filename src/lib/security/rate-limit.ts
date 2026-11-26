@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sha256Hex } from "@/lib/security/crypto";
+import { errorText, log } from "@/lib/log";
 
 export type LimitResult = { ok: boolean; retryAfterSec: number };
 
@@ -20,9 +21,7 @@ export async function limit(key: string, max: number, windowMs: number): Promise
     if (error || !data) throw new Error(error?.message ?? "réponse vide");
     return { ok: data.ok, retryAfterSec: data.retry_after_sec };
   } catch (e) {
-    console.error(
-      JSON.stringify({ level: "error", event: "rate_limit_fallback", reason: e instanceof Error ? e.message.slice(0, 120) : "inconnu" }),
-    );
+    log.error("rate_limit_fallback", { erreur: errorText(e) });
     return limitLocal(key, max, windowMs);
   }
 }
