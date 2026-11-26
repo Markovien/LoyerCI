@@ -15,7 +15,7 @@ const role = z.enum(["owner", "manager", "accountant"]);
 async function guard(bucket: string) {
   const { supabase, user } = await getActionUser();
   if (!user) return { error: { ok: false, message: "Session expirée, reconnectez-vous." } as MemberResult };
-  if (!limit(`${bucket}:${user.id}`, 20, 60_000).ok)
+  if (!(await limit(`${bucket}:${user.id}`, 20, 60_000)).ok)
     return { error: { ok: false, message: "Trop de requêtes, patientez une minute." } as MemberResult };
   return { supabase, user, ctx: await requestContext() };
 }

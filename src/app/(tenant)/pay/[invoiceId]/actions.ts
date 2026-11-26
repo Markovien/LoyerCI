@@ -23,7 +23,7 @@ const OPERATOR_LABEL = { orange: "Orange Money", mtn: "MTN MoMo", moov: "Moov Mo
 export async function initiateMobileMoneyPayment(input: unknown): Promise<PayResult> {
   const { supabase, user } = await getActionUser();
   if (!user) return { ok: false, message: "Session expirée, reconnectez-vous." };
-  if (!limit(`pay:${user.id}`, 5, 60_000).ok) return { ok: false, message: "Trop de tentatives. Patientez une minute." };
+  if (!(await limit(`pay:${user.id}`, 5, 60_000)).ok) return { ok: false, message: "Trop de tentatives. Patientez une minute." };
 
   const parsed = initiateMobileMoneySchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Requête invalide." };
@@ -96,7 +96,7 @@ export type ProofState = { ok: boolean; message: string } | null;
 export async function submitTransferProof(_: ProofState, formData: FormData): Promise<ProofState> {
   const { supabase, user } = await getActionUser();
   if (!user) return { ok: false, message: "Session expirée, reconnectez-vous." };
-  if (!limit(`proof:${user.id}`, 3, 10 * 60_000).ok) return { ok: false, message: "Trop d'envois. Réessayez plus tard." };
+  if (!(await limit(`proof:${user.id}`, 3, 10 * 60_000)).ok) return { ok: false, message: "Trop d'envois. Réessayez plus tard." };
 
   const parsed = transferProofSchema.safeParse({
     invoiceId: formData.get("invoiceId"),
@@ -149,7 +149,8 @@ export async function submitTransferProof(_: ProofState, formData: FormData): Pr
 export async function submitDirectPayment(_: ProofState, formData: FormData): Promise<ProofState> {
   const { supabase, user } = await getActionUser();
   if (!user) return { ok: false, message: "Session expirée, reconnectez-vous." };
-  if (!limit(`direct:${user.id}`, 3, 10 * 60_000).ok) return { ok: false, message: "Trop d'envois. Réessayez dans quelques minutes." };
+  if (!(await limit(`direct:${user.id}`, 3, 10 * 60_000)).ok)
+    return { ok: false, message: "Trop d'envois. Réessayez dans quelques minutes." };
 
   const parsed = directPaymentSchema.safeParse({
     invoiceId: formData.get("invoiceId"),

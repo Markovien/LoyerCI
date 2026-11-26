@@ -14,7 +14,8 @@ const schema = z.object({ offsets: z.string().max(60), email: z.boolean() });
 export async function saveReminderSettings(input: unknown): Promise<SettingsResult> {
   const { supabase, user } = await getActionUser();
   if (!user) return { ok: false, message: "Session expirée, reconnectez-vous." };
-  if (!limit(`reminder-settings:${user.id}`, 10, 60_000).ok) return { ok: false, message: "Trop de requêtes, patientez une minute." };
+  if (!(await limit(`reminder-settings:${user.id}`, 10, 60_000)).ok)
+    return { ok: false, message: "Trop de requêtes, patientez une minute." };
   const v = schema.safeParse(input);
   const offsets = v.success ? parseOffsets(v.data.offsets) : null;
   if (!v.success || !offsets) return { ok: false, message: "Échéances : de 1 à 5 valeurs entre J-15 et J+60 (ex. J-3, J+3, J+10)." };

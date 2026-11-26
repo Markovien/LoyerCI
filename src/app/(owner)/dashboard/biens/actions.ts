@@ -12,7 +12,7 @@ export type PropertyResult = { ok: boolean; message: string; id?: string };
 export async function saveProperty(input: unknown): Promise<PropertyResult> {
   const { user } = await getActionUser();
   if (!user) return { ok: false, message: "Session expirée, reconnectez-vous." };
-  if (!limit(`property:${user.id}`, 30, 60_000).ok) return { ok: false, message: "Trop de requêtes, patientez une minute." };
+  if (!(await limit(`property:${user.id}`, 30, 60_000)).ok) return { ok: false, message: "Trop de requêtes, patientez une minute." };
 
   const raw = (input ?? {}) as { orgId?: unknown; propertyId?: unknown; values?: unknown };
   const org = uuid.safeParse(raw.orgId);

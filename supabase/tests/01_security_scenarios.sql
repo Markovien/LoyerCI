@@ -2121,4 +2121,43 @@ do $$ begin
   assert not has_table_privilege('authenticated', 'private.purged_documents', 'select'), 'pierres tombales lisibles';
 end $$;
 
+-- =============================================================================
+-- P4.1 — Limiteur de débit partagé (PostgreSQL)
+-- =============================================================================
+set role service_role;
+do $$
+declare
+  k constant text := encode(extensions.digest('login:test@example.ci', 'sha256'), 'hex');
+  r record;
+  n int := 0;
+begin
+  for i in 1..3 loop
+    select * into r from public.rate_limit_hit(k, 3, 60000);
+    if r.ok then n := n + 1; end if;
+  end loop;
+  select * into r from public.rate_limit_hit(k, 3, 60000);
+  assert n = 3 and not r.ok and r.retry_after_sec between 1 and 60, format('limiteur : %s admis, 4e : %s (%s s)', n, r.ok, r.retry_after_sec);
+  -- Une autre clé n'est pas affectée.
+  select * into r from public.rate_limit_hit(encode(extensions.digest('login:autre@example.ci', 'sha256'), 'hex'), 3, 60000);
+  assert r.ok, 'clés non cloisonnées';
+  begin
+    perform public.rate_limit_hit('login:test@example.ci', 3, 60000);
+    raise exception 'ÉCHEC : clé en clair acceptée';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.rate_limit_hit(k, 0, 60000);
+    raise exception 'ÉCHEC : plafond nul accepté';
+  exception when invalid_parameter_value then null;
+  end;
+  raise notice 'OK  P4.1 limiteur : plafond respecté, délai indiqué, clés hachées et cloisonnées';
+end $$;
+reset role;
+do $$ begin
+  assert not exists (select 1 from private.rate_limits where key_hash !~ '^[0-9a-f]{64}$'), 'clé en clair stockée';
+  assert not has_function_privilege('authenticated', 'public.rate_limit_hit(text, integer, integer)', 'execute'), 'limiteur exposé au client';
+  assert not has_function_privilege('anon', 'public.rate_limit_hit(text, integer, integer)', 'execute'), 'limiteur exposé à anon';
+  assert not has_table_privilege('authenticated', 'private.rate_limits', 'select'), 'compteurs lisibles';
+end $$;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

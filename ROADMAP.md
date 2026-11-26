@@ -176,7 +176,8 @@ Objectif : chaque locataire reçoit ses avis et quittances sans effort et peut e
 
 ## Phase 4 — Durcissement avant production
 
-1. **P4.1 Limiteur de débit distribué** : remplacer le stockage de `src/lib/security/rate-limit.ts` par Redis (ex. Upstash), sans changer l'interface `limit()`.
+1. **P4.1 Limiteur de débit distribué** (fait le 26/11/2026) : remplacer le stockage de `src/lib/security/rate-limit.ts` par Redis (ex. Upstash), sans changer l'interface `limit()`.
+   - Décision du 26/11/2026 : **PostgreSQL Supabase** plutôt que Redis (aucun nouveau prestataire ni sous-traitant à déclarer). Fonction atomique `rate_limit_hit` (fenêtre glissante approchée), clés **hachées** (aucune IP ni e-mail en clair), table non journalisée nettoyée chaque heure ; `limit()` devient asynchrone (28 appels) ; repli sur le limiteur local si la base est injoignable. Test de concurrence : 5 requêtes admises sur 20 simultanées.
 2. **P4.2 Réconciliation de secours** (si CinetPay est activé) : tâche horaire qui interroge `/v2/payment/check` pour les intentions `initie` de plus de 30 minutes.
 3. **P4.3 Rétention** : purge des `webhook_events` après 90 jours (les documents et preuves de paiement : 2 ans après émission, traité en P3.4).
 4. **P4.4 Audit hors base** : export quotidien signé de `audit_logs` vers un stockage WORM externe ; alerte si `verify_audit_chain()` renvoie une ligne.

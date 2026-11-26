@@ -30,7 +30,7 @@ export async function requestInvitationLogin(_: InvitationState, formData: FormD
   if (!email.success) return { ok: false, message: email.error.issues[0]?.message ?? "Adresse e-mail invalide" };
 
   const { ip } = await requestContext();
-  if (!limit(`invite-login:${ip ?? "?"}`, 5, 10 * 60_000).ok || !limit(`invite-login:${token.data}`, 3, 10 * 60_000).ok) {
+  if (!(await limit(`invite-login:${ip ?? "?"}`, 5, 10 * 60_000)).ok || !(await limit(`invite-login:${token.data}`, 3, 10 * 60_000)).ok) {
     return { ok: false, message: "Trop de tentatives. Réessayez dans quelques minutes." };
   }
   const admin = supabaseAdmin();
@@ -72,7 +72,7 @@ export async function acceptInvitation(_: InvitationState, formData: FormData): 
   if (!token.success) return { ok: false, message: "Lien d'invitation invalide." };
   const { user } = await getActionUser();
   if (!user) return { ok: false, message: "Session expirée : rouvrez le lien reçu par e-mail." };
-  if (!limit(`invite-accept:${user.id}`, 5, 10 * 60_000).ok) return { ok: false, message: "Trop de tentatives." };
+  if (!(await limit(`invite-accept:${user.id}`, 5, 10 * 60_000)).ok) return { ok: false, message: "Trop de tentatives." };
   const ctx = await requestContext();
   const { error } = await supabaseAdmin().rpc("accept_invitation", {
     p_token_hash: sha256Hex(token.data),

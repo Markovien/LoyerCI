@@ -111,7 +111,7 @@ Chaque faille a été **démontrée** avant correction, puis le PoC a été rejo
 ### 3.1 À traiter dans les phases déjà prévues de la feuille de route
 | Gravité | Risque | Où le traiter |
 |---|---|---|
-| 🟠 Élevée (avant production) | **Limiteur de débit en mémoire** : sans effet en serverless ou multi-instances (chaque instance a son compteur) | P4.1 (Redis) |
+| ✅ Traité en P4.1 | ~~**Limiteur de débit en mémoire** : sans effet en serverless ou multi-instances~~ : compteurs partagés dans PostgreSQL (atomiques, clés hachées), repli local si la base est injoignable | — |
 | ✅ Traité en P1.6 | ~~Ajout de coordonnées de réception sans ré-authentification ni alerte~~ : ré-authentification par code **vérifiée en base** (usage unique, 5 min), bandeau d'alerte pendant la carence, annulation en un clic | Reste : **expédition** des alertes e-mail/SMS (file `private.outbox` prête), phase D |
 | 🟡 Moyenne | **Suppression des derniers maillons d'audit** indétectable depuis la base (PoC 6) | P4.4 : export de `private.audit_chain_head()` (ajoutée) vers un stockage WORM externe |
 | 🟡 Moyenne | **Vérification quotidienne de la chaîne sans alerte** : le résultat de `pg_cron` n'est lu par personne. *Atténué en P2.6* : le propriétaire voit l'indicateur d'intégrité à chaque ouverture du journal ; reste l'alerte proactive | P4.4 / P4.5 |

@@ -1444,6 +1444,14 @@ export type Database = {
           quittances: number;
         }[];
       };
+      purge_rate_limits: { Args: Record<PropertyKey, never>; Returns: number };
+      rate_limit_hit: {
+        Args: { p_key_hash: string; p_max: number; p_window_ms: number };
+        Returns: {
+          ok: boolean;
+          retry_after_sec: number;
+        }[];
+      };
       record_advance: {
         Args: { p_actor: string; p_ip: unknown; p_lease: string; p_ua: string };
         Returns: number;

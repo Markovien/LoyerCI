@@ -12,7 +12,7 @@ export async function sendMagicLink(_: LoginState, formData: FormData): Promise<
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Saisie invalide" };
 
   const { ip } = await requestContext();
-  if (!limit(`login:${ip ?? "?"}`, 5, 10 * 60_000).ok || !limit(`login:${parsed.data.email}`, 3, 10 * 60_000).ok) {
+  if (!(await limit(`login:${ip ?? "?"}`, 5, 10 * 60_000)).ok || !(await limit(`login:${parsed.data.email}`, 3, 10 * 60_000)).ok) {
     return { ok: false, message: "Trop de tentatives. Réessayez dans quelques minutes." };
   }
 

@@ -17,7 +17,7 @@ const maskEmail = (email: string) => email.replace(/^(.{2}).*(@.*)$/, "$1••�
 export async function requestReauthCode(): Promise<SettingsResult> {
   const { supabase, user } = await getActionUser();
   if (!user?.email) return { ok: false, message: "Session expirée, reconnectez-vous." };
-  if (!limit(`reauth-code:${user.id}`, 3, 10 * 60_000).ok) {
+  if (!(await limit(`reauth-code:${user.id}`, 3, 10 * 60_000)).ok) {
     return { ok: false, message: "Trop de demandes de code. Réessayez dans quelques minutes." };
   }
   const { error } = await supabase.auth.signInWithOtp({ email: user.email, options: { shouldCreateUser: false } });
@@ -41,7 +41,7 @@ export async function requestReauthCode(): Promise<SettingsResult> {
 export async function addReceivingAccount(input: unknown): Promise<SettingsResult> {
   const { supabase, user } = await getActionUser();
   if (!user?.email) return { ok: false, message: "Session expirée, reconnectez-vous." };
-  if (!limit(`reauth-verify:${user.id}`, 5, 10 * 60_000).ok) {
+  if (!(await limit(`reauth-verify:${user.id}`, 5, 10 * 60_000)).ok) {
     return { ok: false, message: "Trop de tentatives. Réessayez dans quelques minutes." };
   }
 
@@ -97,7 +97,7 @@ export async function addReceivingAccount(input: unknown): Promise<SettingsResul
 export async function cancelReceivingAccount(accountId: unknown): Promise<SettingsResult> {
   const { user } = await getActionUser();
   if (!user) return { ok: false, message: "Session expirée, reconnectez-vous." };
-  if (!limit(`payout-cancel:${user.id}`, 10, 60_000).ok) return { ok: false, message: "Trop de requêtes." };
+  if (!(await limit(`payout-cancel:${user.id}`, 10, 60_000)).ok) return { ok: false, message: "Trop de requêtes." };
   const id = uuid.safeParse(accountId);
   if (!id.success) return { ok: false, message: "Identifiant invalide" };
   const ctx = await requestContext();
@@ -115,7 +115,7 @@ export async function cancelReceivingAccount(accountId: unknown): Promise<Settin
 export async function savePaymentSettings(input: unknown): Promise<SettingsResult> {
   const { user } = await getActionUser();
   if (!user) return { ok: false, message: "Session expirée, reconnectez-vous." };
-  if (!limit(`settings:${user.id}`, 10, 60_000).ok) return { ok: false, message: "Trop de requêtes." };
+  if (!(await limit(`settings:${user.id}`, 10, 60_000)).ok) return { ok: false, message: "Trop de requêtes." };
   const parsed = paymentSettingsSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Saisie invalide" };
   const ctx = await requestContext();

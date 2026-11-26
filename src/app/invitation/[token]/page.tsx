@@ -27,7 +27,7 @@ export default async function InvitationPage({ params }: { params: Promise<{ tok
   if (!invitationTokenSchema.safeParse(token).success) notFound();
   const env = serverEnv();
   const ip = clientIpFrom(await headers(), env.CLIENT_IP_HEADER, env.TRUSTED_PROXY_HOPS);
-  if (!limit(`invitation-view:${ip ?? "?"}`, 30, 60_000).ok) {
+  if (!(await limit(`invitation-view:${ip ?? "?"}`, 30, 60_000)).ok) {
     return <main className="mx-auto max-w-md p-6 text-sm">Trop de requêtes. Réessayez dans une minute.</main>;
   }
   const { data: inv } = await supabaseAdmin()

@@ -21,7 +21,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ inv
   const supabase = await createSupabaseServer();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return new NextResponse("Non authentifié", { status: 401 });
-  if (!limit(`notice-pdf:${auth.user.id}`, 30, 60_000).ok) return new NextResponse("Trop de requêtes", { status: 429 });
+  if (!(await limit(`notice-pdf:${auth.user.id}`, 30, 60_000)).ok) return new NextResponse("Trop de requêtes", { status: 429 });
 
   // Lecture RLS : l'avis doit être visible par cet utilisateur.
   const { data: invoice } = await supabase.from("invoices").select("id").eq("id", invoiceId).maybeSingle();

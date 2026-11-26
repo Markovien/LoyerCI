@@ -15,7 +15,7 @@ export type TenantResult = { ok: boolean; message: string; id?: string };
 export async function saveTenant(input: unknown): Promise<TenantResult> {
   const { user } = await getActionUser();
   if (!user) return { ok: false, message: "Session expirée, reconnectez-vous." };
-  if (!limit(`tenant:${user.id}`, 30, 60_000).ok) return { ok: false, message: "Trop de requêtes, patientez une minute." };
+  if (!(await limit(`tenant:${user.id}`, 30, 60_000)).ok) return { ok: false, message: "Trop de requêtes, patientez une minute." };
   const raw = (input ?? {}) as { orgId?: unknown; tenantId?: unknown; values?: unknown };
   const org = uuid.safeParse(raw.orgId);
   const v = tenantSchema.safeParse(raw.values);
@@ -55,7 +55,7 @@ export type InviteResult =
 export async function inviteTenant(tenantId: unknown): Promise<InviteResult> {
   const { supabase, user } = await getActionUser();
   if (!user) return { ok: false, message: "Session expirée, reconnectez-vous." };
-  if (!limit(`invite:${user.id}`, 20, 60_000).ok) return { ok: false, message: "Trop de requêtes, patientez une minute." };
+  if (!(await limit(`invite:${user.id}`, 20, 60_000)).ok) return { ok: false, message: "Trop de requêtes, patientez une minute." };
   const tid = uuid.safeParse(tenantId);
   if (!tid.success) return { ok: false, message: "Locataire invalide." };
   const { data: t } = await supabase.from("tenants").select("id, full_name, phone, organizations(name)").eq("id", tid.data).maybeSingle();
@@ -93,7 +93,7 @@ export async function inviteTenant(tenantId: unknown): Promise<InviteResult> {
 export async function unlinkTenant(tenantId: unknown): Promise<TenantResult> {
   const { user } = await getActionUser();
   if (!user) return { ok: false, message: "Session expirée, reconnectez-vous." };
-  if (!limit(`unlink:${user.id}`, 10, 60_000).ok) return { ok: false, message: "Trop de requêtes." };
+  if (!(await limit(`unlink:${user.id}`, 10, 60_000)).ok) return { ok: false, message: "Trop de requêtes." };
   const tid = uuid.safeParse(tenantId);
   if (!tid.success) return { ok: false, message: "Locataire invalide." };
   const ctx = await requestContext();

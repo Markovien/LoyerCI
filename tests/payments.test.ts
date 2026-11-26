@@ -105,7 +105,7 @@ describe("durcissement (audit 18/11/2026)", () => {
   });
 
   it("le limiteur évince les clés anciennes sans remettre à zéro les compteurs actifs", async () => {
-    const { limit } = await import("@/lib/security/rate-limit");
+    const { limitLocal: limit } = await import("@/lib/security/rate-limit");
     const now = 1_000_000;
     for (let i = 0; i < 3; i++) expect(limit("cible", 3, 60_000, now).ok).toBe(true);
     expect(limit("cible", 3, 60_000, now).ok).toBe(false);

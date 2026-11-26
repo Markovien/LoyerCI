@@ -30,7 +30,7 @@ export type ActionResult = { ok: boolean; message: string; url?: string };
 async function guard(bucket: string, max = 20) {
   const { user } = await getActionUser();
   if (!user) return { error: { ok: false, message: "Session expirée, reconnectez-vous." } as ActionResult };
-  if (!limit(`${bucket}:${user.id}`, max, 60_000).ok) {
+  if (!(await limit(`${bucket}:${user.id}`, max, 60_000)).ok) {
     return { error: { ok: false, message: "Trop de requêtes, patientez une minute." } as ActionResult };
   }
   return { user, ctx: await requestContext() };

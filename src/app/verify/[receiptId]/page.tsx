@@ -38,7 +38,7 @@ async function resolve(receiptId: string, code: string | undefined): Promise<Vie
 
   const env = serverEnv();
   const ip = clientIpFrom(await headers(), env.CLIENT_IP_HEADER, env.TRUSTED_PROXY_HOPS);
-  if (!limit(`verify:${ip ?? "?"}`, 20, 60_000).ok) return { kind: "throttled" };
+  if (!(await limit(`verify:${ip ?? "?"}`, 20, 60_000)).ok) return { kind: "throttled" };
 
   // verify_receipt / verify_notice ne sont exécutables que par service_role (pas d'appel
   // PostgREST direct qui contournerait ce limiteur) ; elles ne renvoient que des données masquées.

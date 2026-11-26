@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   const supabase = await createSupabaseServer();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return new NextResponse("Non authentifié", { status: 401 });
-  if (!limit(`pispi-poster:${auth.user.id}`, 10, 60_000).ok) return new NextResponse("Trop de requêtes", { status: 429 });
+  if (!(await limit(`pispi-poster:${auth.user.id}`, 10, 60_000)).ok) return new NextResponse("Trop de requêtes", { status: 429 });
 
   const ctx = await requestContext();
   const { data, error } = await supabaseAdmin()

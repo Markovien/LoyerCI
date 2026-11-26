@@ -11,7 +11,7 @@ export type LeaseResult = { ok: boolean; message: string };
 async function ctxFor(bucket: string) {
   const { user } = await getActionUser();
   if (!user) return { error: { ok: false, message: "Session expirée, reconnectez-vous." } as LeaseResult };
-  if (!limit(`${bucket}:${user.id}`, 20, 60_000).ok)
+  if (!(await limit(`${bucket}:${user.id}`, 20, 60_000)).ok)
     return { error: { ok: false, message: "Trop de requêtes, patientez une minute." } as LeaseResult };
   return { user, ctx: await requestContext() };
 }

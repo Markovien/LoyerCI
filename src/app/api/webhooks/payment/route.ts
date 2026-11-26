@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   const env = serverEnv();
   const ip = clientIpFrom(request.headers, env.CLIENT_IP_HEADER, env.TRUSTED_PROXY_HOPS);
 
-  if (!limit(`webhook:${ip ?? "?"}`, 120, 60_000).ok) {
+  if (!(await limit(`webhook:${ip ?? "?"}`, 120, 60_000)).ok) {
     return new NextResponse("too many requests", { status: 429 });
   }
 

@@ -75,3 +75,16 @@ if [[ "$OWNERS" == "1" ]]; then
 else
   echo "  ÉCHEC concurrence propriétaires : $OWNERS propriétaire(s) restant(s)"; cat "$DATA/o1" "$DATA/o2"; exit 1
 fi
+
+# --- Concurrence : limiteur de débit partagé (P4.1) ------------------------------------
+echo "→ test de concurrence (20 requêtes simultanées, plafond de 5)"
+KEY="$(printf 'concurrence-limiteur' | sha256sum | cut -d' ' -f1)"
+HIT="set role service_role; select ok from public.rate_limit_hit('$KEY', 5, 600000);"
+for i in $(seq 1 20); do "${PSQL[@]}" -At -c "$HIT" > "$DATA/l$i" 2>&1 & done
+wait
+ALLOWED="$(cat "$DATA"/l* | grep -c '^t$' || true)"
+if [[ "$ALLOWED" == "5" ]]; then
+  echo "  OK  concurrence : $ALLOWED requêtes admises sur 20 (plafond 5)"
+else
+  echo "  ÉCHEC concurrence limiteur : $ALLOWED admises (attendu 5)"; cat "$DATA"/l*; exit 1
+fi

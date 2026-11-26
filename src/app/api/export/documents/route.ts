@@ -23,7 +23,7 @@ export async function GET() {
   const supabase = await createSupabaseServer();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return new NextResponse("Non authentifié", { status: 401 });
-  if (!limit(`docs-export:${auth.user.id}`, 3, 60_000).ok) return new NextResponse("Trop de requêtes", { status: 429 });
+  if (!(await limit(`docs-export:${auth.user.id}`, 3, 60_000)).ok) return new NextResponse("Trop de requêtes", { status: 429 });
   const m = await activeMembership(supabase, auth.user.id, ["owner", "accountant"]);
   if (!m) return new NextResponse("Accès refusé", { status: 403 });
 
