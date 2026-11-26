@@ -2193,4 +2193,34 @@ do $$ begin
   assert not has_function_privilege('authenticated', 'public.stale_provider_intents(public.payment_provider, integer)', 'execute'), 'liste exposée';
 end $$;
 
+-- =============================================================================
+-- P4.3 — Purge des données techniques (webhooks 90 j, file d'envoi, ré-authentification)
+-- =============================================================================
+insert into public.webhook_events (provider, event_key, signature_valid, payload, received_at) values
+  ('cinetpay', repeat('a', 64), true, '{"cpm_phone_prefixe": "225", "cel_phone_num": "0707000111"}', now() - interval '91 days'),
+  ('cinetpay', repeat('b', 64), true, '{}', now() - interval '10 days');
+insert into private.outbox (org_id, kind, payload, sent_at, dedupe_key) values
+  ('c0000000-0000-4000-8000-000000000001', 'paiement_declare', '{}', now() - interval '100 days', 'p43-vieux'),
+  ('c0000000-0000-4000-8000-000000000001', 'paiement_declare', '{}', null, 'p43-en-attente');
+update private.outbox set created_at = now() - interval '200 days' where dedupe_key = 'p43-en-attente';
+insert into private.reauth_grants (user_id, granted_at) values ('a0000000-0000-4000-8000-000000000001', now() - interval '40 days');
+set role service_role;
+do $$
+declare r record;
+begin
+  select * into r from public.purge_technical_data();
+  assert r.webhooks >= 1 and r.messages >= 1 and r.reauth >= 1, format('purge technique : %s', row_to_json(r));
+end $$;
+reset role;
+do $$ begin
+  assert not exists (select 1 from public.webhook_events where event_key = repeat('a', 64)), 'webhook de plus de 90 jours conservé';
+  assert exists (select 1 from public.webhook_events where event_key = repeat('b', 64)), 'webhook récent purgé';
+  assert not exists (select 1 from private.outbox where dedupe_key = 'p43-vieux'), 'message expédié ancien conservé';
+  assert exists (select 1 from private.outbox where dedupe_key = 'p43-en-attente'), 'message non expédié purgé';
+  assert not exists (select 1 from private.reauth_grants where granted_at < now() - interval '30 days'), 'ré-authentification ancienne conservée';
+  assert exists (select 1 from public.audit_logs), 'journal d''audit purgé';
+  assert not has_function_privilege('authenticated', 'public.purge_technical_data()', 'execute'), 'purge exposée';
+  raise notice 'OK  P4.3 purge technique : webhooks > 90 j, messages traités > 90 j, ré-authentifications > 30 j ; audit intact';
+end $$;
+
 \echo '=== TOUS LES SCÉNARIOS DE SÉCURITÉ SONT PASSÉS ==='

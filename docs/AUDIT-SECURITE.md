@@ -117,7 +117,7 @@ Chaque faille a été **démontrée** avant correction, puis le PoC a été rejo
 | 🟡 Moyenne | **Vérification quotidienne de la chaîne sans alerte** : le résultat de `pg_cron` n'est lu par personne. *Atténué en P2.6* : le propriétaire voit l'indicateur d'intégrité à chaque ouverture du journal ; reste l'alerte proactive | P4.4 / P4.5 |
 | 🟢 Faible | Vérification d'intégrité en O(n) sur toute la chaîne à chaque ouverture du journal | Acceptable au pilote ; vérification incrémentale (point de contrôle signé) en P4.4 |
 | 🟢 Faible (résiduel) | **Preuves de paiement** : filtre PDF heuristique. ~~Métadonnées EXIF/GPS conservées~~ → **corrigé en P1.3** (retrait des blocs EXIF/XMP/IPTC des JPEG et des blocs texte des PNG, sans décodage) | Rendu des PDF hors du contexte applicatif (P4.7) |
-| 🟢 Faible | `webhook_events.payload` conserve le numéro de téléphone payeur | P4.3 (purge à 90 jours) |
+| ✅ Traité en P4.3 | ~~`webhook_events.payload` conserve le numéro de téléphone payeur~~ : purge quotidienne à 90 jours | — |
 | 🟢 Faible | Le locataire peut lire les UUID `declared_by`/`validated_by` de ses paiements | P0.2 (vue dédiée) |
 | 🟢 Faible | Verrou consultatif global sur l'audit : sérialise toutes les écritures sensibles | Acceptable au volume du pilote ; à mesurer en P4.5 |
 | 🟢 Faible | `CLIENT_IP_HEADER` mal réglé = IP falsifiable (audit et limiteur) | Liste de contrôle de mise en production |

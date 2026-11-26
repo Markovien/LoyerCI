@@ -1445,6 +1445,15 @@ export type Database = {
         }[];
       };
       purge_rate_limits: { Args: Record<PropertyKey, never>; Returns: number };
+      purge_technical_data: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          fichiers: number;
+          messages: number;
+          reauth: number;
+          webhooks: number;
+        }[];
+      };
       rate_limit_hit: {
         Args: { p_key_hash: string; p_max: number; p_window_ms: number };
         Returns: {
