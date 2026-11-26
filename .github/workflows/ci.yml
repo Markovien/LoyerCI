@@ -80,6 +80,8 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
+      - name: Sauvegarde et restauration (P4.6)
+        run: sudo apt-get install -y -qq age && ./scripts/backup-restore-test.sh
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

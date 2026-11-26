@@ -106,4 +106,5 @@ pendant la carence de 48 h. Un test vérifie qu'aucune page locataire ne contien
 - [ ] Alerte de l'hébergeur sur les événements de journal `sante_anomalie` et `rate_limit_fallback` (contrôle de santé quotidien `/api/cron/health`)
 - [ ] Contrôle manuel d'une affiche PI-SPI imprimée avec l'application d'un établissement participant
 - [ ] Tests d'intrusion
+- [ ] Sauvegardes : clé age générée hors ligne, secret de signature conservé à part, secrets `BACKUP_AGE_RECIPIENT` et `BACKUP_DATABASE_URL` dans l'environnement GitHub `production`, première exécution vérifiée (`docs/SAUVEGARDE-RESTAURATION.md`)
 - [ ] Types à jour : `npm run gen:types`

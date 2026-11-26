@@ -1,0 +1,66 @@
+# P4.6 — Sauvegarde quotidienne GRATUITE (décision du 26/11/2026) : données de la base,
+# chiffrées avec la clé publique age de l'équipe (la clé privée reste hors ligne : ni GitHub
+# ni personne d'autre ne peut lire la sauvegarde), conservées 30 jours comme artefact.
+# Restauration : docs/SAUVEGARDE-RESTAURATION.md. Inactive tant que les secrets manquent.
+name: Sauvegarde quotidienne
+
+on:
+  schedule:
+    - cron: "15 2 * * *" # 02:15 UTC (= heure d'Abidjan)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sauvegarde
+  cancel-in-progress: false
+
+jobs:
+  sauvegarde:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Secrets rangés dans l'environnement « production » (règles de protection possibles).
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Configuration
+        id: config
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+        run: |
+          if [[ -z "$DATABASE_URL" || -z "$RECIPIENT" ]]; then
+            echo "::notice::Sauvegarde non configurée (secrets BACKUP_DATABASE_URL et BACKUP_AGE_RECIPIENT)."
+            echo "actif=0" >> "$GITHUB_OUTPUT"
+          else
+            [[ "$RECIPIENT" =~ ^age1[0-9a-z]{58}$ ]] || { echo "::error::Clé publique age invalide"; exit 1; }
+            echo "actif=1" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Outils (client PostgreSQL 17, age)
+        if: steps.config.outputs.actif == '1'
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17 age
+      - name: Sauvegarde chiffrée
+        if: steps.config.outputs.actif == '1'
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+        run: |
+          set -o pipefail
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+          FILE="loyerci-$(date -u +%Y-%m-%d).sql.age"
+          bash scripts/backup-dump.sh | age -r "$RECIPIENT" -o "$FILE"
+          # Contrôle : le fichier est bien chiffré et non vide.
+          head -c 21 "$FILE" | grep -q "age-encryption.org/v1" && [[ $(stat -c %s "$FILE") -gt 1024 ]]
+          echo "FILE=$FILE" >> "$GITHUB_ENV"
+      - if: steps.config.outputs.actif == '1'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sauvegarde-${{ github.run_id }}
+          path: ${{ env.FILE }}
+          retention-days: 30
+          if-no-files-found: error
